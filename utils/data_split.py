@@ -18,29 +18,21 @@ def data_split_to_train_val_test(aug_args, data_path, flag, train_ratio=0.8, val
     """
     if flag:
         # 读取数据集
-        df = pd.read_csv(data_path)
-
-        # 获取数据集的长度
-        data_len = len(df)
-
-        # 计算训练集、验证集、测试集的长度
-        train_len = int(data_len * train_ratio)
-        val_len = int(data_len * val_ratio)
-        test_len = data_len - train_len - val_len  
-
-        # 划分数据集
-        train_data = df.iloc[:train_len]
-        val_data = df.iloc[train_len: train_len + val_len]
-        test_data = df.iloc[train_len + val_len:]
+        data_df = pd.read_csv(data_path)
+        df_name = os.path.basename(data_path).split('.')[0]
+        l = len(data_df["train"])
+        train_df =  data_df["train"].iloc[:int(l * 0.7)]
+        val_df = data_df["train"].iloc[int(l * 0.7):]
+        test_df = data_df["test"]
 
         # 数据增强
-        train_path_dict = aug_data_processing(aug_args.root_path, size=aug_args.size, aug_times=aug_args.aug_times, data_csv=train_data, datasets_name="train")
+        train_path_dict = aug_data_processing(aug_args.root_path, aug_times=aug_args.aug_times, data_csv=train_df, datasets_name="train", csv_name=df_name)
         train_data = pd.DataFrame(train_path_dict)
 
-        val_path_dict = aug_data_processing(aug_args.root_path, size=aug_args.size, aug_times=aug_args.aug_times, data_csv=val_data, datasets_name="val")
+        val_path_dict = aug_data_processing(aug_args.root_path, aug_times=aug_args.aug_times, data_csv=val_df, datasets_name="val", csv_name=df_name)
         val_data = pd.DataFrame(val_path_dict)
 
-        test_path_dict = aug_data_processing(aug_args.root_path, size=aug_args.size, aug_times=aug_args.aug_times, data_csv=test_data, datasets_name="test")
+        test_path_dict = aug_data_processing(aug_args.root_path, aug_times=aug_args.aug_times, data_csv=test_df, datasets_name="test", csv_name=df_name)
         test_data = pd.DataFrame(test_path_dict)
 
         # 保存数据集
@@ -55,7 +47,7 @@ def data_split_to_train_val_test(aug_args, data_path, flag, train_ratio=0.8, val
 
     return train_data_save_path, val_data_save_path, test_data_save_path
 
-def small_data_split_to_train_val_test(data_path, num_small_data: int, flag, train_ratio=0.8, val_ratio=0.1, save_root_path="./datasets"):
+def small_data_split_to_train_val_test(aug_args, data_path, num_small_data: int, flag, train_ratio=0.8, val_ratio=0.1, save_root_path="./datasets"):
     """
     data_path: csv数据集文件路径
     train_ratio: 训练集比例  默认值：0.8
@@ -67,25 +59,27 @@ def small_data_split_to_train_val_test(data_path, num_small_data: int, flag, tra
         # 读取数据集
         df_small = pd.read_csv(data_path, nrows=num_small_data + 1)
 
-        # 获取数据集的长度
-        data_len = len(df_small)
+        df_name = os.path.basename(data_path).split('.')[0]
+        l = len(df_small["train"])
+        train_df =  df_small["train"].iloc[:int(l * 0.7)]
+        val_df = df_small["train"].iloc[int(l * 0.7):]
+        test_df = df_small["test"]
 
-        # 计算训练集、验证集、测试集的长度
-        train_len = int(data_len * train_ratio)
-        val_len = int(data_len * val_ratio)
-        test_len = data_len - train_len - val_len  
+        # 数据增强
+        train_path_dict = aug_data_processing(aug_args.root_path, aug_times=aug_args.aug_times, data_csv=train_df, datasets_name="train", csv_name=df_name)
+        train_data = pd.DataFrame(train_path_dict)
 
-        # 划分数据集
-        train_data = df_small.iloc[:train_len]
-        val_data = df_small.iloc[train_len: train_len + val_len]
-        test_data = df_small.iloc[train_len + val_len:]
+        val_path_dict = aug_data_processing(aug_args.root_path, aug_times=aug_args.aug_times, data_csv=val_df, datasets_name="val", csv_name=df_name)
+        val_data = pd.DataFrame(val_path_dict)
 
-        # 如果提供了保存路径，则保存数据集
-        if save_root_path:
-            train_data.to_csv(f"{save_root_path}/num_{num_small_data}_train_{os.path.basename(data_path).split('.')[0]}.csv", index=False)
-            val_data.to_csv(f"{save_root_path}/num_{num_small_data}_val_{os.path.basename(data_path).split('.')[0]}.csv", index=False)
-            test_data.to_csv(f"{save_root_path}/num_{num_small_data}_test_{os.path.basename(data_path).split('.')[0]}.csv", index=False)
-            print("数据集划分完成！")
+        test_path_dict = aug_data_processing(aug_args.root_path, aug_times=aug_args.aug_times, data_csv=test_df, datasets_name="test", csv_name=df_name)
+        test_data = pd.DataFrame(test_path_dict)
+
+        # 保存数据集
+        train_data.to_csv(f"{save_root_path}/num_{num_small_data}_train_{os.path.basename(data_path).split('.')[0]}.csv", index=False)
+        val_data.to_csv(f"{save_root_path}/num_{num_small_data}_val_{os.path.basename(data_path).split('.')[0]}.csv", index=False)
+        test_data.to_csv(f"{save_root_path}/num_{num_small_data}_test_{os.path.basename(data_path).split('.')[0]}.csv", index=False)
+        print("数据集划分完成！")
         
     train_data_save_path = f"{save_root_path}/num_{num_small_data}_train_{os.path.basename(data_path).split('.')[0]}.csv"
     val_data_save_path = f"{save_root_path}/num_{num_small_data}_val_{os.path.basename(data_path).split('.')[0]}.csv"

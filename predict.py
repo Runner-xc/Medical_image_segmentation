@@ -2,7 +2,7 @@ import torch
 from PIL import Image
 import torchvision
 from torch.utils.data import DataLoader, Dataset
-from utils.my_data import SEM_DATA
+from utils.rock_data import SEM_DATA
 import argparse
 import time
 from model.deeplabv3 import deeplabv3_resnet50, deeplabv3_resnet101, deeplabv3_mobilenetv3_large
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout_p',      type=int,       default=0   )
     parser.add_argument('--model',          type=str,       default='rdam_unet',     help='unet, a_unet, m_unet, rdam_unet, ResD_unet, Segnet, pspnet, deeplabv3, u2net_full, u2net_lite')
     parser.add_argument('--weights_path',   type=str,       
-                                            default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/results/save_weights/rdam_unet/L_DiceLoss--S_CosineAnnealingLR/optim_AdamW-lr_0.0003-wd_0.0001/2025-03-31_17-00-12/model_best_ep_12.pth')
+                                            default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/results/save_weights/rdam_unet/L_DiceLoss--S_CosineAnnealingLR/optim_AdamW-lr_0.0008-wd_0.0001/2025-04-01_17-40-23/model_best_ep_23.pth')
     
     parser.add_argument('--save_path',      type=str,       default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/results/predict')
     parser.add_argument('--single_path',    type=str,       default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/results/single_predict')

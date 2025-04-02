@@ -58,10 +58,16 @@ def train_one_epoch(model, optimizer, epoch, train_dataloader, device, loss_fn, 
     model.train()
     
     epoch_train_loss = 0.0
-    epoch_OM_loss = 0.0
-    epoch_OP_loss = 0.0
-    epoch_IOP_loss = 0.0
-    Metric_list = np.zeros((6, 4))
+    epoch_Aorta_loss = 0.0
+    epoch_Gallbladder_loss = 0.0
+    epoch_Left_Kidney_loss = 0.0
+    epoch_Right_Kidney_loss = 0.0
+    epoch_Liver_loss = 0.0  
+    epoch_Pancreas_loss = 0.0
+    epoch_Spleen_loss = 0.0
+    epoch_Stomach_loss = 0.0
+
+    Metric_list = np.zeros((6, 9))
 
     # 使用 tqdm 包装 train_dataloader
     train_dataloader = tqdm(train_dataloader, desc=f" Training on Epoch :{epoch + 1}😀", leave=False)
@@ -95,31 +101,52 @@ def train_one_epoch(model, optimizer, epoch, train_dataloader, device, loss_fn, 
                     # 主分支loss
                     main_loss_dict = loss_fn(heatmap, masks)
                     m_mean_loss = main_loss_dict['total_loss']
-                    m_OM_loss, m_OP_loss, m_IOP_loss = main_loss_dict['Organic matter'], main_loss_dict['Organic pores'], main_loss_dict['Inorganic pores']
-
+                    m_Aorta_loss  = main_loss_dict['Aorta']
+                    m_Gallbladder_loss = main_loss_dict['Gallbladder']
+                    m_Left_Kidney_loss = main_loss_dict['Left Kidney']
+                    m_Right_Kidney_loss = main_loss_dict['Right Kidney']
+                    m_Liver_loss = main_loss_dict['Liver']
+                    m_Pancreas_loss = main_loss_dict['Pancreas']
+                    m_Spleen_loss = main_loss_dict['Spleen']
+                    m_Stomach_loss = main_loss_dict['Stomach']
+                    
                     # 辅助分支loss
                     aux_loss_dict = loss_fn(aux, masks)
                     a_mean_loss = aux_loss_dict['total_loss']
-                    a_OM_loss, a_OP_loss, a_IOP_loss = aux_loss_dict['Organic matter'], aux_loss_dict['Organic pores'], aux_loss_dict['Inorganic pores']
+                    a_Aorta_loss = aux_loss_dict['Aorta']
+                    a_Gallbladder_loss = aux_loss_dict['Gallbladder']
+                    a_Left_Kidney_loss = aux_loss_dict['Left Kidney']
+                    a_Right_Kidney_loss = aux_loss_dict['Right Kidney']
+                    a_Liver_loss = aux_loss_dict['Liver']
+                    a_Pancreas_loss = aux_loss_dict['Pancreas']
+                    a_Spleen_loss = aux_loss_dict['Spleen']
+                    a_Stomach_loss = aux_loss_dict['Stomach']
                     
                     # 计算总损失：主分支损失*0.6 + 辅助分支损失*0.4
                     train_mean_loss = m_mean_loss*0.6 + a_mean_loss*0.4
-                    OM_loss, OP_loss, IOP_loss = m_OM_loss*0.6 + a_OM_loss*0.4, m_OP_loss*0.6 + a_OP_loss*0.4, m_IOP_loss*0.6 + a_IOP_loss*0.4
+                    Aorta_loss = m_Aorta_loss*0.6 + a_Aorta_loss*0.4
+                    Gallbladder_loss = m_Gallbladder_loss*0.6 + a_Gallbladder_loss*0.4
+                    Left_Kidney_loss = m_Left_Kidney_loss*0.6 + a_Left_Kidney_loss*0.4
+                    Right_Kidney_loss = m_Right_Kidney_loss*0.6 + a_Right_Kidney_loss*0.4
+                    Liver_loss = m_Liver_loss*0.6 + a_Liver_loss*0.4
+                    Pancreas_loss = m_Pancreas_loss*0.6 + a_Pancreas_loss*0.4
+                    Spleen_loss = m_Spleen_loss*0.6 + a_Spleen_loss*0.4
+                    Stomach_loss = m_Stomach_loss*0.6 + a_Stomach_loss*0.4
 
                     metrics = Metric.update(heatmap, masks)
-                    Metric_list += metrics
-                
-
-                
+                    Metric_list += metrics      
 
             else:
                 loss_dict = loss_fn(pred, masks)
                 train_mean_loss = loss_dict['total_loss']
-                OM_loss, OP_loss, IOP_loss = loss_dict['Organic matter'], loss_dict['Organic pores'], loss_dict['Inorganic pores']
-                # if elnloss:
-                #     # 添加Elastic Net正则化
-                #     elastic_net_loss = model.elastic_net(l1_lambda=l1_lambda, l2_lambda=l2_lambda)
-                #     train_mean_loss = train_mean_loss + elastic_net_loss
+                Aorta_loss = loss_dict['Aorta']
+                Gallbladder_loss = loss_dict['Gallbladder']
+                Left_Kidney_loss = loss_dict['Left Kidney']
+                Right_Kidney_loss = loss_dict['Right Kidney']
+                Liver_loss = loss_dict['Liver']
+                Pancreas_loss = loss_dict['Pancreas']
+                Spleen_loss = loss_dict['Spleen']
+                Stomach_loss = loss_dict['Stomach']
 
                 metrics = Metric.update(pred, masks)
                 Metric_list += metrics
@@ -137,13 +164,18 @@ def train_one_epoch(model, optimizer, epoch, train_dataloader, device, loss_fn, 
         scheduler.step()
 
         epoch_train_loss += train_mean_loss.item()
-        epoch_OM_loss += OM_loss.item()
-        epoch_OP_loss += OP_loss.item()
-        epoch_IOP_loss += IOP_loss.item()
-    Metric_list /= len(train_dataloader)
-    return epoch_OM_loss, epoch_OP_loss, epoch_IOP_loss, epoch_train_loss, Metric_list  
+        epoch_Aorta_loss += Aorta_loss.item()
+        epoch_Gallbladder_loss += Gallbladder_loss.item()
+        epoch_Left_Kidney_loss += Left_Kidney_loss.item()
+        epoch_Right_Kidney_loss += Right_Kidney_loss.item()
+        epoch_Liver_loss += Liver_loss.item()
+        epoch_Pancreas_loss += Pancreas_loss.item()
+        epoch_Spleen_loss += Spleen_loss.item()
+        epoch_Stomach_loss += Stomach_loss.item()
 
-def train_one_epochv2(components_dict):
+    Metric_list /= len(train_dataloader)
+    return epoch_Aorta_loss, epoch_Gallbladder_loss, epoch_Left_Kidney_loss, epoch_Right_Kidney_loss, epoch_Liver_loss, epoch_Pancreas_loss, epoch_Spleen_loss, epoch_Stomach_loss, epoch_train_loss, Metric_list  
+
     """"
     components_dict =  {"model"      :model, 
                         "optimizer"  :optimizer, 
@@ -270,13 +302,18 @@ def evaluate(model, device, data_loader, loss_fn, Metric, test:bool=False):
     """
     model.eval()
     if test:
-        Metric_list = np.zeros((6, 4))
+        Metric_list = np.zeros((6, 9))
     else:
-        Metric_list = np.zeros((6, 4))
+        Metric_list = np.zeros((6, 9))
     val_mean_loss = 0.0
-    val_OM_loss = 0.0
-    val_OP_loss = 0.0
-    val_IOP_loss = 0.0
+    val_Aorta_loss = 0.0
+    val_Gallbladder_loss = 0.0
+    val_Left_Kidney_loss = 0.0
+    val_Right_Kidney_loss = 0.0
+    val_Liver_loss = 0.0  
+    val_Pancreas_loss = 0.0
+    val_Spleen_loss = 0.0
+    val_Stomach_loss = 0.0
 
 
     with torch.no_grad():
@@ -300,35 +337,68 @@ def evaluate(model, device, data_loader, loss_fn, Metric, test:bool=False):
                     # 主分支loss
                     main_loss_dict = loss_fn(heatmap, masks)
                     m_mean_loss = main_loss_dict['total_loss']
-                    m_OM_loss, m_OP_loss, m_IOP_loss = main_loss_dict['Organic matter'], main_loss_dict['Organic pores'], main_loss_dict['Inorganic pores']
-
+                    m_Aorta_loss  = main_loss_dict['Aorta']
+                    m_Gallbladder_loss = main_loss_dict['Gallbladder']
+                    m_Left_Kidney_loss = main_loss_dict['Left Kidney']
+                    m_Right_Kidney_loss = main_loss_dict['Right Kidney']
+                    m_Liver_loss = main_loss_dict['Liver']
+                    m_Pancreas_loss = main_loss_dict['Pancreas']
+                    m_Spleen_loss = main_loss_dict['Spleen']
+                    m_Stomach_loss = main_loss_dict['Stomach']
+                    
                     # 辅助分支loss
                     aux_loss_dict = loss_fn(aux, masks)
                     a_mean_loss = aux_loss_dict['total_loss']
-                    a_OM_loss, a_OP_loss, a_IOP_loss = aux_loss_dict['Organic matter'], aux_loss_dict['Organic pores'], aux_loss_dict['Inorganic pores']
+                    a_Aorta_loss = aux_loss_dict['Aorta']
+                    a_Gallbladder_loss = aux_loss_dict['Gallbladder']
+                    a_Left_Kidney_loss = aux_loss_dict['Left Kidney']
+                    a_Right_Kidney_loss = aux_loss_dict['Right Kidney']
+                    a_Liver_loss = aux_loss_dict['Liver']
+                    a_Pancreas_loss = aux_loss_dict['Pancreas']
+                    a_Spleen_loss = aux_loss_dict['Spleen']
+                    a_Stomach_loss = aux_loss_dict['Stomach']
                     
                     # 计算总损失：主分支损失*0.6 + 辅助分支损失*0.4
-                    mean_loss = m_mean_loss*0.6 + a_mean_loss*0.4
-                    OM_loss, OP_loss, IOP_loss = m_OM_loss*0.6 + a_OM_loss*0.4, m_OP_loss*0.6 + a_OP_loss*0.4, m_IOP_loss*0.6 + a_IOP_loss*0.4
+                    val_mean_loss = m_mean_loss*0.6 + a_mean_loss*0.4
+                    Aorta_loss = m_Aorta_loss*0.6 + a_Aorta_loss*0.4
+                    Gallbladder_loss = m_Gallbladder_loss*0.6 + a_Gallbladder_loss*0.4
+                    Left_Kidney_loss = m_Left_Kidney_loss*0.6 + a_Left_Kidney_loss*0.4
+                    Right_Kidney_loss = m_Right_Kidney_loss*0.6 + a_Right_Kidney_loss*0.4
+                    Liver_loss = m_Liver_loss*0.6 + a_Liver_loss*0.4
+                    Pancreas_loss = m_Pancreas_loss*0.6 + a_Pancreas_loss*0.4
+                    Spleen_loss = m_Spleen_loss*0.6 + a_Spleen_loss*0.4
+                    Stomach_loss = m_Stomach_loss*0.6 + a_Stomach_loss*0.4
 
                     metrics = Metric.update(heatmap, masks)
                     Metric_list += metrics    
 
                 else:
                     loss_dict = loss_fn(pred_mask, masks)
-                    mean_loss = loss_dict['total_loss']
-                    OM_loss, OP_loss, IOP_loss = loss_dict['Organic matter'], loss_dict['Organic pores'], loss_dict['Inorganic pores']
+                    val_mean_loss = loss_dict['total_loss']
+                    Aorta_loss = loss_dict['Aorta']
+                    Gallbladder_loss = loss_dict['Gallbladder']
+                    Left_Kidney_loss = loss_dict['Left Kidney']
+                    Right_Kidney_loss = loss_dict['Right Kidney']
+                    Liver_loss = loss_dict['Liver']
+                    Pancreas_loss = loss_dict['Pancreas']
+                    Spleen_loss = loss_dict['Spleen']
+                    Stomach_loss = loss_dict['Stomach']
 
                     metrics = Metric.update(pred_mask, masks)
                     Metric_list += metrics    
 
             # 累加损失   # TODO : 2
-            val_mean_loss += mean_loss.item()
-            val_OM_loss += OM_loss.item()
-            val_OP_loss += OP_loss.item()
-            val_IOP_loss += IOP_loss.item()
+            val_mean_loss += val_mean_loss.item()
+            val_Aorta_loss += Aorta_loss.item()
+            val_Gallbladder_loss += Gallbladder_loss.item()
+            val_Left_Kidney_loss += Left_Kidney_loss.item()
+            val_Right_Kidney_loss += Right_Kidney_loss.item()
+            val_Liver_loss += Liver_loss.item()
+            val_Pancreas_loss += Pancreas_loss.item()
+            val_Spleen_loss += Spleen_loss.item()
+            val_Stomach_loss += Stomach_loss.item()
     
     Metric_list /= len(val_dataloader)
 
     # TODO : 3
-    return val_OM_loss,val_OP_loss,val_IOP_loss, val_mean_loss, Metric_list
+    return val_Aorta_loss, val_Gallbladder_loss, val_Left_Kidney_loss, val_Right_Kidney_loss, val_Liver_loss, val_Pancreas_loss, val_Spleen_loss, val_Stomach_loss, val_mean_loss, Metric_list

@@ -1,7 +1,7 @@
 import torch
 import datetime
 from torch.utils.data import DataLoader, Dataset
-from utils.my_data import SEM_DATA
+from utils.medicine_data import Synapse_data
 from utils import data_split
 from utils.writing_logs import writing_logs
 import argparse
@@ -40,7 +40,7 @@ import swanlab
 # 预处理
 class SODPresetTrain:
     def __init__(self, base_size: Union[int, List[int]], crop_size: int,
-                 hflip_prob=0.5, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+                 hflip_prob=0.5, mean=(0.485), std=(0.229)):
         self.transforms = T.Compose([
             T.ToTensor(),
             # T.Resize(base_size),
@@ -54,7 +54,7 @@ class SODPresetTrain:
         return data
 
 class SODPresetEval:
-    def __init__(self, base_size: Union[int, List[int]], mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+    def __init__(self, base_size: Union[int, List[int]], mean=(0.485), std=(0.229)):
         self.transforms = T.Compose([
             T.ToTensor(),
             # T.Resize(base_size),
@@ -164,10 +164,10 @@ def main(args, aug_args):
     val_ratio = args.val_ratio   
 
     # 读取数据集
-    train_datasets = SEM_DATA(train_datasets, 
+    train_datasets = Synapse_data(train_datasets, 
                             transforms=SODPresetTrain((256, 256), crop_size=256))
     
-    val_datasets = SEM_DATA(val_datasets, 
+    val_datasets = Synapse_data(val_datasets, 
                             transforms=SODPresetEval((256, 256)))
     
     num_workers = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])
@@ -189,22 +189,22 @@ def main(args, aug_args):
             # UNet 系列
             "u2net_full"                    : u2net_full_config(),
             "u2net_lite"                    : u2net_lite_config(),
-            "unet"                          : UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "ResD_unet"                     : ResD_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "a_unet"                        : A_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "m_unet"                        : M_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "rdam_unet"                     : RDAM_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "dwrdam_unet"                   : DWRDAM_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "aicunet"                       : AICUNet(in_channels=3, n_classes=4, base_channels=32, p=args.dropout_p),
-            "vm_unet"                       : VMUNet(input_channels=3, num_classes=4),
-            "dc_unet"                       : DC_UNet(in_channels=3, n_classes=4, p=args.dropout_p),
+            "unet"                          : UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
+            "ResD_unet"                     : ResD_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
+            "a_unet"                        : A_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
+            "m_unet"                        : M_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
+            "rdam_unet"                     : RDAM_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
+            "dwrdam_unet"                   : DWRDAM_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
+            "aicunet"                       : AICUNet(in_channels=1, n_classes=9, base_channels=32, p=args.dropout_p),
+            "vm_unet"                       : VMUNet(input_channels=1, num_classes=9),
+            "dc_unet"                       : DC_UNet(in_channels=1, n_classes=9, p=args.dropout_p),
 
             # 其他架构
-            "Segnet"                        : SegNet(n_classes=4, dropout_p=args.dropout_p),
-            "pspnet"                        : PSPNet(classes=4, dropout=args.dropout_p, pretrained=False),
-            "deeplabv3_resnet50"            : deeplabv3_resnet50(aux=False, pretrain_backbone=False, num_classes=4),
-            "deeplabv3_resnet101"           : deeplabv3_resnet101(aux=False, pretrain_backbone=False, num_classes=4),
-            "deeplabv3_mobilenetv3_large"   : deeplabv3_mobilenetv3_large(aux=False, pretrain_backbone=False, num_classes=4)
+            "Segnet"                        : SegNet(n_classes=9, dropout_p=args.dropout_p),
+            "pspnet"                        : PSPNet(classes=9, dropout=args.dropout_p, pretrained=False),
+            "deeplabv3_resnet50"            : deeplabv3_resnet50(aux=False, pretrain_backbone=False, num_classes=9),
+            "deeplabv3_resnet101"           : deeplabv3_resnet101(aux=False, pretrain_backbone=False, num_classes=9),
+            "deeplabv3_mobilenetv3_large"   : deeplabv3_mobilenetv3_large(aux=False, pretrain_backbone=False, num_classes=9)
         }
     model = model_map.get(args.model)
     if not model:
@@ -213,7 +213,7 @@ def main(args, aug_args):
     # 初始化模型
     kaiming_initial(model)
     model.to(device)
-    model_info = str(summary(model, (1, 3, 256, 256)))  
+    model_info = str(summary(model, (1, 1, 256, 256)))  
     
     """——————————————————————————————————————————————优化器 调度器——————————————————————————————————————————————"""
     # 优化器 
@@ -311,7 +311,7 @@ def main(args, aug_args):
         
         # 初始化SwanLab（整个训练过程只初始化一次）
         swanlab.init(
-            project="UNet",
+            project="Medical_image_segmentation",
             experiment_name=f"{args.model}-{args.loss_fn}-{detailed_time_str}",
             config=config,
         )
@@ -372,7 +372,8 @@ def main(args, aug_args):
         # 记录时间
         start_time = time.time()
         # 训练
-        T_OM_loss, T_OP_loss, T_IOP_loss, train_loss, T_Metric_list = train_one_epoch(model, 
+        # Aorta_loss, Gallbladder_loss, Left_Kidney_loss, Right_Kidney_loss, Liver_loss, Pancreas_loss, Spleen_loss, Stomach_loss, train_loss, Metric_list
+        Aorta_loss, Gallbladder_loss, Left_Kidney_loss, Right_Kidney_loss, Liver_loss, Pancreas_loss, Spleen_loss, Stomach_loss, train_loss, T_Metric_list = train_one_epoch(model, 
                                                                                     optimizer, 
                                                                                     epoch, 
                                                                                     train_dataloader, 
@@ -386,12 +387,26 @@ def main(args, aug_args):
                                                                                     l2_lambda=args.l2_lambda) # loss_fn=loss_fn, 
         
         # 求平均
-        train_OM_loss   = T_OM_loss / len(train_dataloader)
-        train_OP_loss   = T_OP_loss / len(train_dataloader)
-        train_IOP_loss  = T_IOP_loss / len(train_dataloader)
-        train_mean_loss = train_loss / len(train_dataloader)
+        train_Aorta_loss   = Aorta_loss / len(train_dataloader)
+        train_Gallbladder_loss = Gallbladder_loss / len(train_dataloader)
+        train_Left_Kidney_loss = Left_Kidney_loss / len(train_dataloader)
+        train_Right_Kidney_loss = Right_Kidney_loss / len(train_dataloader)
+        train_Liver_loss   = Liver_loss / len(train_dataloader)
+        train_Pancreas_loss = Pancreas_loss / len(train_dataloader)
+        train_Spleen_loss  = Spleen_loss / len(train_dataloader)
+        train_Stomach_loss = Stomach_loss / len(train_dataloader)
+        train_loss       = train_loss / len(train_dataloader)
         
-        train_loss_list = [train_OM_loss, train_OP_loss, train_IOP_loss, train_mean_loss]
+        train_loss_list = [train_Aorta_loss, 
+                           train_Gallbladder_loss, 
+                           train_Left_Kidney_loss, 
+                           train_Right_Kidney_loss, 
+                           train_Liver_loss, 
+                           train_Pancreas_loss, 
+                           train_Spleen_loss,
+                           train_Stomach_loss, 
+                           train_loss]
+        
         # 评价指标 metrics = [recall, precision, dice, f1_score]
         train_metrics               ={}
         train_metrics["Loss"]       = train_loss_list
@@ -408,11 +423,16 @@ def main(args, aug_args):
 
         # 打印
         print(
-              f"💧train_OM_loss: {train_OM_loss:.3f}\n"
-              f"💧train_OP_loss: {train_OP_loss:.3f}\n"
-              f"💧train_IOP_loss: {train_IOP_loss:.3f}\n"
-              f"💧train_mean_loss: {train_mean_loss:.3f}\n"
-              f"🕒train_cost_time: {train_cost_time/60:.2f}mins\n")
+            f"💧train_Aorta_loss: {train_Aorta_loss:.3f}\n"
+            f"💧train_Gallbladder_loss: {train_Gallbladder_loss:.3f}\n"
+            f"💧train_Left_Kidney_loss: {train_Left_Kidney_loss:.3f}\n"
+            f"💧train_Right_Kidney_loss: {train_Right_Kidney_loss:.3f}\n"
+            f"💧train_Liver_loss: {train_Liver_loss:.3f}\n"
+            f"💧train_Pancreas_loss: {train_Pancreas_loss:.3f}\n"
+            f"💧train_Spleen_loss: {train_Spleen_loss:.3f}\n"
+            f"💧train_Stomach_loss: {train_Stomach_loss:.3f}\n"
+            f"💧train_loss: {train_loss:.3f}\n"
+            f"🕒train_cost_time: {train_cost_time/60:.2f}mins\n")
         
 
         """验证"""
@@ -421,14 +441,28 @@ def main(args, aug_args):
             # 记录验证开始时间
             start_time = time.time()
             # 每间隔eval_interval个epoch验证一次，减少验证频率节省训练时间
-            OM_loss,OP_loss,IOP_loss, mean_loss, Metric_list = evaluate(model, device, val_dataloader, loss_fn, Metrics) # val_loss, recall, precision, f1_scores
+            v_Aorta_loss, v_Gallbladder_loss, v_Left_Kidney_loss, v_Right_Kidney_loss, v_Liver_loss, v_Pancreas_loss, v_Spleen_loss, v_Stomach_loss, mean_loss, Metric_list = evaluate(model, device, val_dataloader, loss_fn, Metrics) # val_loss, recall, precision, f1_scores
 
             # 求平均
-            val_OM_loss     = OM_loss / len(val_dataloader)
-            val_OP_loss     = OP_loss / len(val_dataloader)
-            val_IOP_loss    = IOP_loss / len(val_dataloader)
+            v_Aorta_loss     = v_Aorta_loss / len(val_dataloader)
+            v_Gallbladder_loss = v_Gallbladder_loss / len(val_dataloader)
+            v_Left_Kidney_loss = v_Left_Kidney_loss / len(val_dataloader)
+            v_Right_Kidney_loss = v_Right_Kidney_loss / len(val_dataloader)
+            v_Liver_loss     = v_Liver_loss / len(val_dataloader)
+            v_Pancreas_loss  = v_Pancreas_loss / len(val_dataloader)
+            v_Spleen_loss    = v_Spleen_loss / len(val_dataloader)
+            v_Stomach_loss   = v_Stomach_loss / len(val_dataloader)
             val_mean_loss   = mean_loss / len(val_dataloader)
-            val_loss_list   = [val_OM_loss, val_OP_loss, val_IOP_loss, val_mean_loss]
+            # loss_list
+            val_loss_list   = [v_Aorta_loss,
+                               v_Gallbladder_loss, 
+                               v_Left_Kidney_loss, 
+                               v_Right_Kidney_loss, 
+                               v_Liver_loss, 
+                               v_Pancreas_loss, 
+                               v_Spleen_loss,
+                               v_Stomach_loss,
+                               val_mean_loss]
             
             # 获取当前学习率
             current_lr = scheduler.get_last_lr()[0]  
@@ -448,11 +482,16 @@ def main(args, aug_args):
 
             # 打印结果
             print(
-                  f"🔥val_OM_loss: {val_OM_loss:.3f}\n"
-                  f"🔥val_OP_loss: {val_OP_loss:.3f}\n"
-                  f"🔥val_IOP_loss: {val_IOP_loss:.3f}\n"
-                  f"🔥val_mean_loss: {val_mean_loss:.3f}\n"
-                  f"🕒val_cost_time: {val_cost_time:.2f}s")
+                f"🔥val_Aorta_loss: {v_Aorta_loss:.3f}\n"
+                f"🔥val_Gallbladder_loss: {v_Gallbladder_loss:.3f}\n"
+                f"🔥val_Left_Kidney_loss: {v_Left_Kidney_loss:.3f}\n"
+                f"🔥val_Right_Kidney_loss: {v_Right_Kidney_loss:.3f}\n"
+                f"🔥val_Liver_loss: {v_Liver_loss:.3f}\n"
+                f"🔥val_Pancreas_loss: {v_Pancreas_loss:.3f}\n"
+                f"🔥val_Spleen_loss: {v_Spleen_loss:.3f}\n"
+                f"🔥val_Stomach_loss: {v_Stomach_loss:.3f}\n"
+                f"🔥val_mean_loss: {val_mean_loss:.3f}\n"
+                f"🕒val_cost_time: {val_cost_time:.2f}s")
             print(f"🚀Current learning rate: {current_lr:.7f}")
             
             # 记录日志
@@ -462,28 +501,37 @@ def main(args, aug_args):
                 # 新增SwanLab日志记录
                 swanlab.log({
                     # 训练指标
-                    "train/loss": train_mean_loss,
-                    "train/OM_loss": train_OM_loss,
-                    "train/OP_loss": train_OP_loss,
-                    "train/IOP_loss": train_IOP_loss,
-                    "train/Recall": T_Metric_list[0][-1],  # 取均值
-                    "train/Precision": T_Metric_list[1][-1],
-                    "train/Dice": T_Metric_list[2][-1],
-                    "train/F1": T_Metric_list[3][-1],
-                    "train/mIoU": T_Metric_list[4][-1],
-                    "train/Accuracy": T_Metric_list[5][-1],
-                    
+                    "train/Aorta_loss": train_Aorta_loss,
+                    "train/Gallbladder_loss": train_Gallbladder_loss,
+                    "train/Left_Kidney_loss": train_Left_Kidney_loss,
+                    "train/Right_Kidney_loss": train_Right_Kidney_loss,
+                    "train/Liver_loss": train_Liver_loss,
+                    "train/Pancreas_loss": train_Pancreas_loss,
+                    "train/Spleen_loss": train_Spleen_loss,
+                    "train/Stomach_loss": train_Stomach_loss,
+                    "train/train_loss": train_loss,
+                    "train/recall": train_metrics["Recall"][-1],
+                    "train/precision": train_metrics["Precision"][-1],
+                    "train/dice": train_metrics["Dice"][-1],
+                    "train/f1_scores": train_metrics["F1_scores"][-1],
+                    "train/mIoU": train_metrics["mIoU"][-1],
+                    "train/accuracy": train_metrics["Accuracy"][-1],
                     # 验证指标
-                    "val/loss": val_mean_loss,
-                    "val/OM_loss": val_OM_loss,
-                    "val/OP_loss": val_OP_loss,
-                    "val/IOP_loss": val_IOP_loss,
-                    "val/Recall": Metric_list[0][-1],
-                    "val/Precision": Metric_list[1][-1],
-                    "val/Dice": Metric_list[2][-1],
-                    "val/F1": Metric_list[3][-1],
-                    "val/mIoU": Metric_list[4][-1],
-                    "val/Accuracy": Metric_list[5][-1],
+                    "val/Aorta_loss": v_Aorta_loss,
+                    "val/Gallbladder_loss": v_Gallbladder_loss,
+                    "val/Left_Kidney_loss": v_Left_Kidney_loss,
+                    "val/Right_Kidney_loss": v_Right_Kidney_loss,
+                    "val/Liver_loss": v_Liver_loss,
+                    "val/Pancreas_loss": v_Pancreas_loss,
+                    "val/Spleen_loss": v_Spleen_loss,
+                    "val/Stomach_loss": v_Stomach_loss,
+                    "val/val_mean_loss": val_mean_loss,
+                    "val/recall": val_metrics["Recall"][-1],
+                    "val/precision": val_metrics["Precision"][-1],
+                    "val/dice": val_metrics["Dice"][-1],
+                    "val/f1_scores": val_metrics["F1_scores"][-1],
+                    "val/mIoU": val_metrics["mIoU"][-1],
+                    "val/accuracy": val_metrics["Accuracy"][-1],
                     
                     # 学习率
                     "learning_rate": current_lr,
@@ -604,7 +652,7 @@ def main(args, aug_args):
             patience += 1 
     
         # 早停判断
-        if patience >= 50:    
+        if patience >= 30:    
             print('恭喜你触发早停！！')
             break
 
@@ -618,15 +666,15 @@ if __name__ == '__main__':
     
     # 保存路径
     parser.add_argument('--data_path',          type=str, 
-                        default="/mnt/e/VScode/WS-Hub/WS-UNet/UNet/datasets/CSV/shale_256.csv", 
+                        default="/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/medical_datasets/Synapse/CSV/synapse.csv", 
                         help="path to csv dataset")
     
     parser.add_argument('--data_root_path',  type=str,
-                        default="/root/projects/WS-UNet/UNet/datasets/CSV")
+                        default="/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/medical_datasets/Synapse/CSV")
     
     # results
     parser.add_argument('--results_path',   type=str, 
-                        default='/root/projects/WS-UNet/UNet/results')
+                        default='/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/results')
     
     parser.add_argument('--save_scores',   type=str, 
                         default='save_scores')
@@ -642,7 +690,7 @@ if __name__ == '__main__':
     
     # 模型配置
     parser.add_argument('--model',              type=str, 
-                        default="rdam_unet", 
+                        default="unet", 
                         help=" unet, ResD_unet, rdam_unet, a_unet, m_unet, aicunet\
                                Segnet, deeplabv3_resnet50, deeplabv3_mobilenetv3_large, pspnet, u2net_full, u2net_lite,")
     
@@ -662,15 +710,15 @@ if __name__ == '__main__':
     parser.add_argument('--elnloss',        type=bool,  default=False)
     parser.add_argument('--l1_lambda',      type=float, default=0.001)
     parser.add_argument('--l2_lambda',      type=float, default=0.001)
-    parser.add_argument('--dropout_p',      type=float, default=0.4  )
+    parser.add_argument('--dropout_p',      type=float, default=0.5  )
      
     parser.add_argument('--device',         type=str,   default='cuda:0')
     parser.add_argument('--resume',         type=str,   default=None,   help="the path of weight for resuming")
     parser.add_argument('--amp',            type=bool,  default=True,   help='use mixed precision training or not')
     
     # flag参数
-    parser.add_argument('--tb',             type=bool,  default=True,   help='use tensorboard or not')   
-    parser.add_argument('--save_flag',      type=bool,  default=True,   help='save weights or not')    
+    parser.add_argument('--tb',             type=bool,  default=False,   help='use tensorboard or not')   
+    parser.add_argument('--save_flag',      type=bool,  default=False,   help='save weights or not')    
     parser.add_argument('--split_flag',     type=bool,  default=False,  help='split data or not')
     parser.add_argument('--change_params',  type=bool,  default=False,  help='change params or not')       
     
@@ -688,7 +736,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--eval_interval',  type=int,   default=1,      help='interval for evaluation')
     parser.add_argument('--num_small_data', type=int,   default=None,   help='number of small data')
-    parser.add_argument('--Tmax',           type=int,   default=120,     help='the numbers of half of T for CosineAnnealingLR')
+    parser.add_argument('--Tmax',           type=int,   default=60,     help='the numbers of half of T for CosineAnnealingLR')
     parser.add_argument('--eta_min',        type=float, default=1e-8,   help='minimum of lr for CosineAnnealingLR')
 
     main_args = parser.parse_args()

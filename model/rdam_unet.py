@@ -34,12 +34,12 @@ class RDAM_UNet(nn.Module):
         self.down1 = ResD_Down(base_channels, base_channels*2)
         self.acpn1 = AMSFN(base_channels*2)       
         self.msaf2 = MDAM(base_channels*2)
-        self.encoder_dropout2 = nn.Dropout2d(p=p-0.2 if p!=0 else 0)  
+        self.encoder_dropout2 = nn.Dropout2d(p=p*0.5 if p!=0 else 0)  
 
         self.down2 = ResD_Down(base_channels*2, base_channels*4)
         self.acpn2 = AMSFN(base_channels*4) 
         self.msaf3 = MDAM(base_channels*4)
-        self.encoder_dropout3 = nn.Dropout2d(p=p-0.1 if p!=0 else 0)  
+        self.encoder_dropout3 = nn.Dropout2d(p=p*0.8 if p!=0 else 0)  
 
         self.down3 = ResD_Down(base_channels*4, base_channels*8)
         self.acpn3 = AMSFN(base_channels*8)
@@ -49,20 +49,20 @@ class RDAM_UNet(nn.Module):
         # self.dense_aspp = DenseASPPBlock(base_channels*8, base_channels*4, base_channels*8)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.center_conv = DoubleConv(base_channels*8, base_channels*8, mid_channels=base_channels*16)
-        self.bottleneck_dropout = nn.Dropout2d(p=p+0.1 if p!=0.0 else 0.0)
+        self.bottleneck_dropout = nn.Dropout2d(p=min(p+0.1, 0.7) if p!=0.0 else 0.0)
 
         # 解码器
         self.up1 = ResD_Up(base_channels * 8 , base_channels * 4, bilinear=bilinear)
         self.acpn5 = AMSFN(base_channels*4)
-        self.decoder_dropout1 = nn.Dropout2d(0.15 if p!=0 else 0)   
+        self.decoder_dropout1 = nn.Dropout2d(p=p*0.5 if p!=0 else 0)   
 
         self.up2 = ResD_Up(base_channels * 4, base_channels * 2 , bilinear=bilinear)
         self.acpn6 = AMSFN(base_channels*2)    
-        self.decoder_dropout2 = nn.Dropout2d(0.1 if p!=0 else 0) 
+        self.decoder_dropout2 = nn.Dropout2d(p=p*0.3 if p!=0 else 0) 
 
         self.up3 = ResD_Up(base_channels * 2, base_channels, bilinear=bilinear)
         self.acpn7 = AMSFN(base_channels)
-        self.decoder_dropout3 = nn.Dropout2d(0.05 if p!=0 else 0) 
+        self.decoder_dropout3 = nn.Dropout2d(p=p*0.1 if p!=0 else 0) 
 
         self.up4 = Up(base_channels, base_channels, bilinear=bilinear)
         self.acpn8 = AMSFN(base_channels)
@@ -89,7 +89,7 @@ class RDAM_UNet(nn.Module):
         m4 = self.msaf4(e4)
         x4 = self.encoder_dropout4(a4)
         
-        x5 = self.pool(x4)                   # [b, 512, 16, 16]   
+        x5 = self.pool(x4)                               # [b, 512, 16, 16]   
         c5 = self.center_conv(x5)                        # [b, 512, 16, 16]
         c5 = self.bottleneck_dropout(c5)
 

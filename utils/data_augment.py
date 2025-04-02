@@ -26,13 +26,13 @@ class ShaleAugmentor:
             self.config = default_config
         
         self.aug_methods = [
-            self.sobel,
+            # self.sobel,
             self.random_rotate,
             self.unsharp_mask,
             self.morphology_aug,
-            self.histogram_equalization,
+            # self.histogram_equalization,
             self.add_noise,      
-            self.random_erase,
+            # self.random_erase,
         ]
 
     def __call__(self, image, mask):
@@ -213,19 +213,14 @@ class ShaleAugmentor:
         plt.tight_layout()
         plt.show()
 
-def aug_data_processing(root_path, size="256", aug_times=60, data_csv=None, datasets_name=None):
+def aug_data_processing(root_path, aug_times=60, data_csv=None, datasets_name=None, csv_name=None):
     path_dict = {'img': [], 'mask': []}
     # 配置参数
     config = {
-        "input": {
-            "images": os.path.join(root_path, "images"),
-            "masks": os.path.join(root_path, "masks")
-        },
         "output": {
             "images": os.path.join(root_path, "aug_results/images"),
             "masks": os.path.join(root_path, "aug_results/masks")
         },
-        "size"     : size,
         "aug_times": aug_times,
         }
     
@@ -274,8 +269,8 @@ def aug_data_processing(root_path, size="256", aug_times=60, data_csv=None, data
         raise ValueError("Invalid datasets_name. Choose from 'train', 'val', or 'test'.")
 
     # 输出路径
-    output_images_path = os.path.join(os.path.join(config["output"]["images"], config["size"]), "time_" + str(config['aug_times']))
-    output_masks_path = os.path.join(os.path.join(config["output"]["masks"], config["size"]), "time_" + str(config['aug_times']))
+    output_images_path = os.path.join(config["output"]["images"], "time_" + str(config['aug_times']))
+    output_masks_path = os.path.join(config["output"]["masks"], "time_" + str(config['aug_times']))
     if datasets_name:
         output_images_path = os.path.join(output_images_path, datasets_name)
         output_masks_path = os.path.join(output_masks_path, datasets_name)
@@ -285,34 +280,24 @@ def aug_data_processing(root_path, size="256", aug_times=60, data_csv=None, data
     os.makedirs(output_masks_path, exist_ok=True)
 
     if not data_csv.empty:
-        original_img_path_list = [os.path.basename(path) for path in data_csv["img"].values]
-        original_img_path = os.path.dirname(data_csv["img"].values[0])
-        original_mask_path = os.path.dirname(data_csv["mask"].values[0])
+        data_list = data_csv.tolist()
+
     else:    
-        original_img_path_list = os.listdir(os.path.join(config["input"]["images"], config["size"]))
-        original_img_path = os.path.join(config["input"]["images"], config["size"])
-        original_mask_path = os.path.join(config["input"]["masks"], config["size"])
+        print("请上传数据集路径")
 
     # 处理每个样本
-    for img_file in tqdm(original_img_path_list):
-        if not img_file.lower().endswith(('.png', '.jpg', '.jpeg')):
+    for data in tqdm(data_list):
+        if not isinstance(data, str):
             continue
-
-        base_name = os.path.splitext(os.path.basename(img_file))[0]
+        # 读取数据
+        base_name = os.path.splitext(os.path.basename(data))[0]
         # try:
-        image = Image.open(os.path.join(original_img_path, img_file)).convert("L")
-        mask = Image.open(os.path.join(original_mask_path, f"{base_name}.png"))
+        image = Image.fromarray(np.load(data)["image"]*255).convert("L")
+        mask = Image.fromarray(np.load(data)["label"])
         
         # 数据增强
         for i in range(config["aug_times"]):
             aug_img, aug_mask = augmentor(image, mask)
-            
-            # # 可视化检查
-            # if i == 0:  # 只检查第一个增强结果
-            #     augmentor.visualize(
-            #         (np.array(image), np.array(mask)),
-            #         (np.array(aug_img), np.array(aug_mask))
-            #     )
             
             # 保存结果
             img_path = os.path.join(output_images_path, f"{base_name}_aug{i}.jpg")
@@ -324,8 +309,6 @@ def aug_data_processing(root_path, size="256", aug_times=60, data_csv=None, data
     
     return path_dict
 
-        # except Exception as e:
-        #     print(f"Error processing {img_file}: {str(e)}")
 
 def main(args):
     aug_data_processing(args.root_path, 

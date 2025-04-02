@@ -18,14 +18,14 @@ class Evaluate_Metric(nn.Module):
     def __init__(self, smooth=1e-5):
         super(Evaluate_Metric, self).__init__()
         self.class_names = [ 
-                            'Organic matter', 
-                            'Organic pores', 
-                            'Inorganic pores']
-        self.labels = {
-            'Organic matter':0,
-            'Organic pores':1,
-            'Inorganic pores':2
-        }
+                            'Aorta', 
+                            'Gallbladder', 
+                            'Spleen',
+                            'Left Kidney',
+                            'Right Kidney',
+                            'Liver',
+                            'Pancreas',
+                            'Stomach']
         self.smooth = smooth
         
     def compute_confusion_matrix(self, img_pred, img_mask, threshold=0.5):
@@ -52,44 +52,53 @@ class Evaluate_Metric(nn.Module):
 
         # 预处理
         img_pred = torch.argmax(img_pred, dim=1).to(dtype=torch.int64) # 降维，选出概率最大的类索引值
-        img_pred = F.one_hot(img_pred, num_classes=4).permute(0, 3, 1, 2).float() 
-        img_mask = F.one_hot(img_mask, num_classes=4).permute(0, 3, 1, 2).float() 
+        img_pred = F.one_hot(img_pred, num_classes=9).permute(0, 3, 1, 2).float() 
+        img_mask = F.one_hot(img_mask, num_classes=9).permute(0, 3, 1, 2).float() 
 
         # 计算总体召回率
         TP, FN, _, _ = self.compute_confusion_matrix(img_pred, img_mask)
         recall = TP / (TP + FN + self.smooth)
         recall = recall.mean(dim=0)
         
-        OM_rc = recall[1].item()
-        OP_rc = recall[2].item()
-        IOP_rc = recall[3].item()
-        recall = recall[1:].mean()
-        recall = recall.item()
+        Aorta            = recall[1].item()
+        Gallbladder      = recall[2].item()
+        Spleen           = recall[3].item()
+        Left_Kidney      = recall[4].item()
+        Right_Kidney     = recall[5].item()
+        Liver            = recall[6].item()
+        Pancreas         = recall[7].item()
+        Stomach          = recall[8].item()
+        recall           = recall[1:].mean().item()
         
-        return OM_rc, OP_rc, IOP_rc, recall
+        return Aorta, Gallbladder, Spleen, Left_Kidney, Right_Kidney, Liver, Pancreas, Stomach, recall
 
-    
     def precision(self, img_pred, img_mask, threshold=0.5):
         # precision_dict = {}
         # class_names = self.class_names
 
         # 预处理
         img_pred = torch.argmax(img_pred, dim=1).to(dtype=torch.int64) # 降维，选出概率最大的类索引值
-        img_pred = F.one_hot(img_pred, num_classes=4).permute(0, 3, 1, 2).float() 
-        img_mask = F.one_hot(img_mask, num_classes=4).permute(0, 3, 1, 2).float() 
+        img_pred = F.one_hot(img_pred, num_classes=9).permute(0, 3, 1, 2).float() 
+        img_mask = F.one_hot(img_mask, num_classes=9).permute(0, 3, 1, 2).float() 
         
         # 计算总体精准率
         TP, _, FP, _ = self.compute_confusion_matrix(img_pred, img_mask)
         precision = TP / (TP + FP + self.smooth)
         precision = precision.mean(dim=0)
         
-        OM_pc = precision[1].item()
-        OP_pc = precision[2].item()
-        IOP_pc = precision[3].item()
+        Aorta = precision[1].item()
+        Gallbladder = precision[2].item()
+        Spleen = precision[3].item()
+        Left_Kidney = precision[4].item()
+        Right_Kidney = precision[5].item()
+        Liver = precision[6].item()
+        Pancreas = precision[7].item()
+        Stomach = precision[8].item()
+        # 计算总体精准率
         precision = precision[1:].mean()
         precision = precision.item()
         
-        return OM_pc, OP_pc, IOP_pc, precision
+        return Aorta, Gallbladder, Spleen, Left_Kidney, Right_Kidney, Liver, Pancreas, Stomach, precision
 
 
     def f1_score(self, img_pred, img_mask): 
@@ -97,22 +106,29 @@ class Evaluate_Metric(nn.Module):
         recall:     召回率
         precision:  精准率
         """               
-        OM_rc, OP_rc, IOP_rc, recall = self.recall(img_pred, img_mask)
-        OM_pc, OP_pc, IOP_pc, precision = self.precision(img_pred, img_mask)
+        Aorta_rc, Gallbladder_rc, Spleen_rc, Left_Kidney_rc, Right_Kidney_rc, Liver_rc, Pancreas_rc, Stomach_rc, recall = self.recall(img_pred, img_mask)
+        Aorta_pr, Gallbladder_pr, Spleen_pr, Left_Kidney_pr, Right_Kidney_pr, Liver_pr, Pancreas_pr, Stomach_pr, precision= self.precision(img_pred, img_mask)
 
-        # OM_F1
-        OM_F1 = 2 * (OM_rc * OM_pc) / (OM_rc + OM_pc + self.smooth)
-
-        # OP_F1
-        OP_F1 = 2 * (OP_rc * OP_pc) / (OP_rc + OP_pc + self.smooth)
-
-        # IOP_F1
-        IOP_F1 = 2 * (IOP_rc * IOP_pc) / (IOP_rc + IOP_pc + self.smooth)
-
-        # F1_score
+        # Aorta_F1
+        Aorta_F1 = 2 * (Aorta_rc * Aorta_pr) / (Aorta_rc + Aorta_pr + self.smooth)
+        # Gallbladder_F1
+        Gallbladder_F1 = 2 * (Gallbladder_rc * Gallbladder_pr) / (Gallbladder_rc + Gallbladder_pr + self.smooth)
+        # Spleen_F1
+        Spleen_F1 = 2 * (Spleen_rc * Spleen_pr) / (Spleen_rc + Spleen_pr + self.smooth)
+        # Left_Kidney_F1
+        Left_Kidney_F1 = 2 * (Left_Kidney_rc * Left_Kidney_pr) / (Left_Kidney_rc + Left_Kidney_pr + self.smooth)
+        # Right_Kidney_F1
+        Right_Kidney_F1 = 2 * (Right_Kidney_rc * Right_Kidney_pr) / (Right_Kidney_rc + Right_Kidney_pr + self.smooth)
+        # Liver_F1
+        Liver_F1 = 2 * (Liver_rc * Liver_pr) / (Liver_rc + Liver_pr + self.smooth)
+        # Pancreas_F1
+        Pancreas_F1 = 2 * (Pancreas_rc * Pancreas_pr) / (Pancreas_rc + Pancreas_pr + self.smooth)
+        # Stomach_F1
+        Stomach_F1 = 2 * (Stomach_rc * Stomach_pr) / (Stomach_rc + Stomach_pr + self.smooth)
+        # 计算总体F1_score
         F1_score = 2 * (recall * precision) / (recall + precision + self.smooth)
         
-        return OM_F1, OP_F1, IOP_F1, F1_score
+        return Aorta_F1, Gallbladder_F1, Spleen_F1, Left_Kidney_F1, Right_Kidney_F1, Liver_F1, Pancreas_F1, Stomach_F1, F1_score
     
 
     def dice_coefficient(self, logits, targets):
@@ -133,13 +149,18 @@ class Evaluate_Metric(nn.Module):
         union = logits.sum(dim=(0,-2,-1)) + targets.sum(dim=(0,-2,-1))
         dice = (2 * intersection) / (union + self.smooth)
         
-        OM_dice = dice[1].item()
-        OP_dice = dice[2].item()
-        IOP_dice = dice[3].item()
-        dice = dice[1:].mean()
-        dice = dice.item()
+        Aorta = dice[1].item()
+        Gallbladder = dice[2].item()
+        Spleen = dice[3].item()
+        Left_Kidney = dice[4].item()
+        Right_Kidney = dice[5].item()
+        Liver = dice[6].item()
+        Pancreas = dice[7].item()
+        Stomach = dice[8].item()
+        # 计算总体dice
+        dice = dice[1:].mean().item()
 
-        return OM_dice, OP_dice, IOP_dice, dice
+        return Aorta, Gallbladder, Spleen, Left_Kidney, Right_Kidney, Liver, Pancreas, Stomach, dice
 
     def mIoU(self, logits, targets):
         """
@@ -157,13 +178,18 @@ class Evaluate_Metric(nn.Module):
         union = logits.sum(dim=(0,-2,-1)) + targets.sum(dim=(0,-2,-1)) - intersection
         iou =  intersection / (union + self.smooth)
         
-        OM_iou = iou[1].item()
-        OP_iou = iou[2].item()
-        IOP_iou = iou[3].item()
-        mIoU = iou[1:].mean()
-        mIoU = mIoU.item()
+        Aorta = iou[1].item()
+        Gallbladder = iou[2].item()
+        Spleen = iou[3].item()
+        Left_Kidney = iou[4].item()
+        Right_Kidney = iou[5].item()
+        Liver = iou[6].item()
+        Pancreas = iou[7].item()
+        Stomach = iou[8].item()
+        # 计算总体mIoU
+        mIoU = iou[1:].mean().item()
         
-        return OM_iou, OP_iou, IOP_iou, mIoU
+        return Aorta, Gallbladder, Spleen, Left_Kidney, Right_Kidney, Liver, Pancreas, Stomach, mIoU
     
     def accuracy(self, logits, targets):
         """
@@ -171,20 +197,26 @@ class Evaluate_Metric(nn.Module):
         """
         # 预处理
         img_pred = torch.argmax(logits, dim=1).to(dtype=torch.int64) # 降维，选出概率最大的类索引值
-        img_pred = F.one_hot(img_pred, num_classes=4).permute(0, 3, 1, 2).float() 
-        img_mask = F.one_hot(targets, num_classes=4).permute(0, 3, 1, 2).float() 
+        img_pred = F.one_hot(img_pred, num_classes=9).permute(0, 3, 1, 2).float() 
+        img_mask = F.one_hot(targets, num_classes=9).permute(0, 3, 1, 2).float() 
         
         # 计算总体精准率
         TP, FN, FP, TN = self.compute_confusion_matrix(img_pred, img_mask)
         
         accuracy = (TP + TN) / (TP + TN + FN + FP + self.smooth)
         accuracy = accuracy.mean(dim=0)
-        OM_acc = accuracy[1].item()
-        OP_acc = accuracy[2].item()
-        IOP_acc = accuracy[3].item()
+        Aorta = accuracy[1].item()
+        Gallbladder = accuracy[2].item()
+        Spleen = accuracy[3].item()
+        Left_Kidney = accuracy[4].item()
+        Right_Kidney = accuracy[5].item()
+        Liver = accuracy[6].item()
+        Pancreas = accuracy[7].item()
+        Stomach = accuracy[8].item()
+        # 计算总体精准率
         accuracy = accuracy[1:].mean().item()
         
-        return OM_acc, OP_acc, IOP_acc, accuracy
+        return Aorta, Gallbladder, Spleen, Left_Kidney, Right_Kidney, Liver, Pancreas, Stomach, accuracy
 
     def update(self, img_pred, img_mask):
         """

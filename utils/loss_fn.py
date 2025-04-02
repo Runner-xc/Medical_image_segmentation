@@ -17,14 +17,13 @@ Cross Entropy Loss
 class CrossEntropyLoss():
     def __init__(self):
         self.class_names = [
-                            'Organic matter', 
-                            'Organic pores', 
-                            'Inorganic pores']
-        self.labels = {
-            'Organic matter':0,
-            'Organic pores':1,
-            'Inorganic pores':2
-        }
+                            'Aorta', 
+                            'Gallbladder', 
+                            'Spleen',
+                            'Left Kidney',
+                            'Right Kidney',
+                            'Liver',
+                            'Pancreas']
 
     def __call__(self, logits, targets):
         """
@@ -61,19 +60,19 @@ class diceloss():
         """
         self.smooth = smooth
         self.class_names = [
-                            'Organic matter', 
-                            'Organic pores', 
-                            'Inorganic pores']
-        self.labels = {
-            'Organic matter':0,
-            'Organic pores':1,
-            'Inorganic pores':2
-        }
+                            'Aorta', 
+                            'Gallbladder', 
+                            'Spleen',
+                            'Left Kidney',
+                            'Right Kidney',
+                            'Liver',
+                            'Pancreas',
+                            'Stomach']
         self.num_classes = len(self.class_names)
 
     def __call__(self, logits, targets):
         """
-        img_pred: 预测值 (batch, 4, h, w)
+        img_pred: 预测值 (batch, 8, h, w)
         img_mask: 标签值 (batch, h, w)
         """
         num_classes = logits.shape[1]
@@ -96,9 +95,14 @@ class diceloss():
         # 计算每个类别的损失
         loss_dict = {}
         loss_dict['total_loss'] = total_loss
-        loss_dict['Organic matter'] = loss[0]
-        loss_dict['Organic pores'] = loss[1]
-        loss_dict['Inorganic pores'] = loss[2]
+        loss_dict['Aorta'] = loss[0]
+        loss_dict['Gallbladder'] = loss[1]
+        loss_dict['Spleen'] = loss[2]
+        loss_dict['Left Kidney'] = loss[3]
+        loss_dict['Right Kidney'] = loss[4]
+        loss_dict['Liver'] = loss[5]
+        loss_dict['Pancreas'] = loss[6]
+        loss_dict['Stomach'] = loss[7]
 
         return loss_dict
 
@@ -109,14 +113,14 @@ class IOULoss():
         """
         self.smooth = smooth
         self.class_names = [
-                            'Organic matter', 
-                            'Organic pores', 
-                            'Inorganic pores']
-        self.labels = {
-            'Organic matter':0,
-            'Organic pores':1,
-            'Inorganic pores':2
-        }
+                            'Aorta', 
+                            'Gallbladder', 
+                            'Spleen',
+                            'Left Kidney',
+                            'Right Kidney',
+                            'Liver',
+                            'Pancreas',
+                            'Stomach']
         self.num_classes = len(self.class_names)
 
     def __call__(self, logits, targets):
@@ -144,9 +148,14 @@ class IOULoss():
         # 计算每个类别的损失
         loss_dict = {}
         loss_dict['total_loss'] = total_loss
-        loss_dict['Organic matter'] = loss[0]
-        loss_dict['Organic pores'] = loss[1]
-        loss_dict['Inorganic pores'] = loss[2]
+        loss_dict['Aorta'] = loss[0]
+        loss_dict['Gallbladder'] = loss[1]
+        loss_dict['Spleen'] = loss[2]
+        loss_dict['Left Kidney'] = loss[3]
+        loss_dict['Right Kidney'] = loss[4]
+        loss_dict['Liver'] = loss[5]
+        loss_dict['Pancreas'] = loss[6]
+        loss_dict['Stomach'] = loss[7]
 
         return loss_dict
 
@@ -213,14 +222,14 @@ class Focal_Loss():
         self.gamma=gamma
         self.alpha=alpha
         self.class_names = [
-                            'Organic matter', 
-                            'Organic pores', 
-                            'Inorganic pores']
-        self.labels = {
-            'Organic matter':0,
-            'Organic pores':1,
-            'Inorganic pores':2
-        }
+                            'Aorta', 
+                            'Gallbladder', 
+                            'Spleen',
+                            'Left Kidney',
+                            'Right Kidney',
+                            'Liver',
+                            'Pancreas',
+                            'Stomach']
         self.num_classes = len(self.class_names)
 
     def __call__(self,logits, targets):
@@ -243,7 +252,14 @@ class Focal_Loss():
         # 计算每个类别的损失，忽略背景（索引0）
         loss_dict = {}
         total_loss = 0
-        names = ['Organic matter', 'Organic pores', 'Inorganic pores']
+        names = ['Aorta', 
+                'Gallbladder', 
+                'Spleen',
+                'Left Kidney',
+                'Right Kidney',
+                'Liver',
+                'Pancreas',
+                'Stomach']
         for i in range(1, self.num_classes+1):  # 从1开始，忽略背景
             class_loss = focal_loss[targets == i].mean()
             loss_dict[names[i-1]] = class_loss
@@ -256,7 +272,7 @@ class Focal_Loss():
         #     loss_dict[names[i-1]] = self.alpha * ((1-pt)**self.gamma) * ce_loss      
 
         # 计算总损失
-        total_loss /= 3  # 减去背景类
+        total_loss /= num_classes-1  # 减去背景类
         loss_dict['total_loss'] = total_loss
 
         return loss_dict
@@ -269,14 +285,14 @@ class WDiceLoss():
         """
         self.smooth = smooth
         self.class_names = [
-                            'Organic matter', 
-                            'Organic pores', 
-                            'Inorganic pores']
-        self.labels = {
-            'Organic matter':0,
-            'Organic pores':1,
-            'Inorganic pores':2
-        }
+                            'Aorta', 
+                            'Gallbladder', 
+                            'Spleen',
+                            'Left Kidney',
+                            'Right Kidney',
+                            'Liver',
+                            'Pancreas',
+                            'Stomach']
         self.num_classes = len(self.class_names)
 
     def __call__(self, logits, targets, weights=[0.1,0.2,0.7]):
@@ -295,7 +311,14 @@ class WDiceLoss():
         # 计算每个类别的损失
         loss_dict = {}
         total_loss = 0
-        names = ['Organic matter', 'Organic pores', 'Inorganic pores'] 
+        names = ['Aorta', 
+                'Gallbladder', 
+                'Spleen',
+                'Left Kidney',
+                'Right Kidney',
+                'Liver',
+                'Pancreas',
+                'Stomach'] 
         for i in range(1,num_classes):
             pred = preds[:, i, ...]
             target = targets[:, i, ...]
@@ -319,14 +342,14 @@ DWDLoss 动态加权loss
 class DWDLoss(nn.Module):
     def __init__(self, smooth=1e-8):
         self.class_names = [
-                            'Organic matter', 
-                            'Organic pores', 
-                            'Inorganic pores']
-        self.labels = {
-            'Organic matter':0,
-            'Organic pores':1,
-            'Inorganic pores':2
-        }
+                            'Aorta', 
+                            'Gallbladder', 
+                            'Spleen',
+                            'Left Kidney',
+                            'Right Kidney',
+                            'Liver',
+                            'Pancreas',
+                            'Stomach']
         self.smooth = smooth
     def calculate_cnum(self, targets):
         cnum = []
@@ -344,8 +367,23 @@ class DWDLoss(nn.Module):
         masks = F.one_hot(targets, num_classes=num_classes).permute(0, 3, 1, 2).float()
         # 类别权重
         total_loss = 0.0
-        loss_dict = {'Organic matter' : 0.0, 'Organic pores' : 0.0, 'Inorganic pores' : 0.0}
-        names = ['Organic matter', 'Organic pores', 'Inorganic pores'] 
+        loss_dict = {'Aorta' : 0.0, 
+                    'Gallbladder' : 0.0, 
+                    'Spleen' : 0.0,
+                    'Left Kidney' : 0.0,
+                    'Right Kidney' : 0.0,
+                    'Liver' : 0.0,
+                    'Pancreas' : 0.0,
+                    'Stomach' : 0.0}
+        
+        names = ['Aorta', 
+                'Gallbladder', 
+                'Spleen',
+                'Left Kidney',
+                'Right Kidney',
+                'Liver',
+                'Pancreas',
+                'Stomach'] 
         one = torch.tensor(1).to(targets.device)
 
         # 动态加权loss
