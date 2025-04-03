@@ -58,7 +58,7 @@ class Conv_3(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super(Conv_3, self).__init__()
         if mid_channels is None:
-            mid_channels = out_channels // 4
+            mid_channels = in_channels // 4
         self.cbr1 = nn.Sequential(nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
                                   nn.BatchNorm2d(mid_channels), 
                                   nn.ReLU(inplace=True))
@@ -78,7 +78,7 @@ class Dalit_Conv(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super(Dalit_Conv, self).__init__()
         if mid_channels is None:
-            mid_channels = out_channels
+            mid_channels = in_channels // 2
         self.cbr1 = nn.Sequential(nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1), 
                                   nn.BatchNorm2d(mid_channels), 
                                   nn.ReLU(inplace=True))
@@ -98,7 +98,7 @@ class DWDalit_Conv(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super(DWDalit_Conv, self).__init__()
         if mid_channels is None:
-            mid_channels = out_channels
+            mid_channels = in_channels // 2
         self.cbr1 = nn.Sequential(DWConv(in_channels, mid_channels, kernel_size=3, stride=1, padding=1, dilation=1), 
                                   nn.BatchNorm2d(mid_channels), 
                                   nn.ReLU(inplace=True))
@@ -141,7 +141,7 @@ class ResDConv(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):
         super(ResDConv, self).__init__()
         if mid_channels is None:
-            mid_channels = out_channels
+            mid_channels = in_channels // 2
 
         self.c1 = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1),
                                 nn.BatchNorm2d(out_channels))
@@ -189,247 +189,35 @@ class DWResConv(nn.Module):
         x = x + re
         return self.relu(x)
 
-"""-------------------------------------------------Down-sample------------------------------------------------"""
-class Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(Down, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.double_conv = DoubleConv(in_channels, out_channels)
-        
-    def forward(self, x):
-        x = self.maxpool(x)
-        x = self.double_conv(x)
-        return x
+class DWResDConv(nn.Module):
+    def __init__(self, in_channels, out_channels, mid_channels=None):
+        super(DWResDConv, self).__init__()
+        if mid_channels is None:
+            mid_channels = in_channels // 2
 
-class DWDown(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(DWDown, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.double_conv = DWDoubleConv(in_channels, out_channels)
-        
-    def forward(self, x):
-        x = self.maxpool(x)
-        x = self.double_conv(x)
-        return x
-
-class D_Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(D_Down, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.double_conv = Dalit_Conv(in_channels, out_channels)
-        
-    def forward(self, x):
-        x = self.maxpool(x)
-        x = self.double_conv(x)
-        return x
-    
-class Res_Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(Res_Down, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.res_conv = ResConv(in_channels, out_channels)
-        
-    def forward(self, x):
-        x = self.maxpool(x)
-        x = self.res_conv(x)
-        return x
-
-class DWRes_Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(DWRes_Down, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.res_conv = DWResConv(in_channels, out_channels)
-        
-    def forward(self, x):
-        return self.res_conv(self.maxpool(x))
-    
-class ResD_Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(ResD_Down, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.D_conv = Dalit_Conv(in_channels, out_channels)
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        self.c1 = nn.Sequential(nn.Conv2d(in_channels, out_channels, kernel_size=1),
+                                nn.BatchNorm2d(out_channels))
         self.relu = nn.ReLU(inplace=True)
+
+        self.cbr1 = nn.Sequential(DWConv(in_channels, mid_channels, kernel_size=3, padding=1), 
+                                  nn.BatchNorm2d(mid_channels), 
+                                  nn.ReLU(inplace=True))
+        
+        self.cbr2 = nn.Sequential(DWConv(mid_channels, mid_channels, kernel_size=3, padding=2, dilation=2), 
+                                  nn.BatchNorm2d(mid_channels), 
+                                  nn.ReLU(inplace=True))
+        
+        self.cbr3 = nn.Sequential(DWConv(mid_channels, out_channels, kernel_size=3, padding=3, dilation=3), 
+                                  nn.BatchNorm2d(out_channels))
         
     def forward(self, x):
-        x = self.maxpool(x)
-        res = x
-        res = self.conv(res)
-        x = self.D_conv(x)
-        x = x + res
+        residual = x
+        re = self.c1(residual)
+        x = self.cbr1(x)
+        x = self.cbr2(x)
+        x = self.cbr3(x)
+        x = x + re
         return self.relu(x)
-
-class DWResD_Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(DWResD_Down, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.D_conv = DWDalit_Conv(in_channels, out_channels)
-        self.conv = DWConv(in_channels, out_channels, kernel_size=3, stride=1, padding=1, dilation=1)
-        self.relu = nn.ReLU(inplace=True)
-        
-    def forward(self, x):
-        x = self.maxpool(x)
-        res = x
-        res = self.conv(res)
-        x = self.D_conv(x)
-        x = torch.add(x, res)
-        x = self.relu(x)
-        return x
-
-class SE_Down(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(SE_Down, self).__init__()
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv = DoubleConv(in_channels, out_channels)
-        self.se = SE_Block(out_channels, ratio=int(0.25*out_channels))
-        
-    def forward(self, x): 
-        return self.se(self.conv(self.maxpool(x)))
-"""-------------------------------------------------Up-sample------------------------------------------------"""        
-class Up(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(Up, self).__init__()
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv = DoubleConv(in_channels*2, out_channels, in_channels//2)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.conv = DoubleConv(in_channels*2, out_channels)
-        
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-    
-class DWUp(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(DWUp, self).__init__()
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv = DWDoubleConv(in_channels*2, out_channels, in_channels//2)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.conv = DWDoubleConv(in_channels*2, out_channels)
-        
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-
-class D_Up(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(D_Up, self).__init__()
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv = Dalit_Conv(in_channels*2, out_channels, in_channels//2)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.conv = Dalit_Conv(in_channels*2, out_channels)
-    
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-
-class Res_Up(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(Res_Up, self).__init__()
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv = ResConv(in_channels*2, out_channels)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.conv = ResConv(in_channels*2, out_channels)
-
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-
-class DWRes_Up(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(DWRes_Up, self).__init__()
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv = DWResConv(in_channels*2, out_channels)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.conv = DWResConv(in_channels*2, out_channels)
-
-    def forward(self, x1, x2):
-        x1 = self.up(x1)        
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-    
-class ResD_Up(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(ResD_Up, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.d_conv = Dalit_Conv(in_channels*2, out_channels, in_channels//2)
-            self.conv = nn.Conv2d(in_channels*2, out_channels, kernel_size=1)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.d_conv = Dalit_Conv(in_channels*2, out_channels, in_channels//2)
-            self.conv = nn.Conv2d(in_channels*2, out_channels, kernel_size=1)
-        
-    def forward(self, x1, x2):
-        x1 = self.up(x1)        
-        x = torch.cat([x2, x1], dim=1)
-        res = self.conv(x)
-        x = self.d_conv(x)
-        x = torch.add(x, res)
-        x = self.relu(x)
-        return x
-
-class DWResD_Up(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(DWResD_Up, self).__init__()
-        self.relu = nn.ReLU(inplace=True)
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.d_conv = DWDalit_Conv(in_channels*2, out_channels, in_channels//2)
-            self.conv = DWConv(in_channels*2, out_channels, kernel_size=3, padding=1)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.d_conv = DWDalit_Conv(in_channels*2, out_channels, in_channels//2)
-            self.conv = DWConv(in_channels*2, out_channels, kernel_size=3, padding=1)
-        
-    def forward(self, x1, x2):
-        x1 = self.up(x1)    
-        x = torch.cat([x2, x1], dim=1)
-        res = self.conv(x)
-        x = self.d_conv(x)
-        x = torch.add(x, res)
-        x = self.relu(x)
-        return x
-    
-class SE_Up(nn.Module):
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super(SE_Up, self).__init__()
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv1 = nn.Conv2d(in_channels , in_channels // 2, kernel_size=1)
-            self.conv = DoubleConv(in_channels, out_channels, in_channels//2)
-            self.se = SE_Block(out_channels, ratio=int(0.25*out_channels))
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-            self.conv = DoubleConv(in_channels, out_channels)
-            self.se = SE_Block(out_channels, ratio=int(0.25*out_channels))
-
-    def forward(self, x1, x2):
-        x1 = self.up(x1)       
-        x1 = self.conv1(x1)
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        x = self.se(x)
-        return x
     
 """---------------------------------------------Pyramid Pooling Module----------------------------------------------------"""
 class STEFunction(torch.autograd.Function):

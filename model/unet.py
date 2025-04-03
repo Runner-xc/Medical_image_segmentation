@@ -6,82 +6,82 @@ from torchinfo import summary
 import torch.nn as nn
 from tensorboardX import SummaryWriter 
 from .utils.model_info import calculate_computation  
-
-class OutConv(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(OutConv, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
-        
-    def forward(self, x):
-        x = self.conv(x)
-        return x
-    
+  
 class UNet(nn.Module):
     def __init__(self, in_channels,
                  n_classes,
                  p, 
                  base_channels=32,
-                 bilinear=True
                  ):
         super(UNet, self).__init__()
         self.in_channels = in_channels
         self.n_classes = n_classes
-        self.bilinear = bilinear
-        
-        self.inconv = DoubleConv(in_channels, base_channels)
+        self.dowm = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        # 编码器
+        self.encoder1 = DoubleConv(in_channels, base_channels)
+        self.encoder2 = DoubleConv(base_channels, base_channels*2)
+        self.encoder3 = DoubleConv(base_channels*2, base_channels*4)
+        self.encoder4 = DoubleConv(base_channels*4, base_channels*8)
+        # encoder_dropout
         self.encoder_dropout1 = nn.Dropout2d(p=p*0.3 if p!=0 else 0)
-
-        self.down1 = Down(base_channels, base_channels*2)
         self.encoder_dropout2 = nn.Dropout2d(p=p*0.5 if p!=0 else 0)
-
-        self.down2 = Down(base_channels*2, base_channels*4)
         self.encoder_dropout3 = nn.Dropout2d(p=p*0.7 if p!=0 else 0)
-
-        self.down3 = Down(base_channels*4, base_channels*8)
         self.encoder_dropout4 = nn.Dropout2d(p=p*0.9 if p!=0 else 0)
-
+        # bottleneck
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.center_conv = DoubleConv(base_channels*8, base_channels*8, mid_channels=base_channels*16)
-        self.bottleneck_dropout = nn.Dropout2d(p=p if p!=0.0 else 0.0) 
-
-        self.up1 = Up(base_channels * 8 , base_channels * 4, bilinear=bilinear)
+        self.bottleneck_dropout = nn.Dropout2d(p=p if p!=0.0 else 0.0)
+        # 解码器
+        self.decoder1 = DoubleConv(base_channels * 16 , base_channels * 4) 
+        self.decoder2 = DoubleConv(base_channels * 8 ,  base_channels * 2)
+        self.decoder3 = DoubleConv(base_channels * 4 ,  base_channels)
+        self.decoder4 = DoubleConv(base_channels * 2,   base_channels)
+        # decoder_dropout
         self.decoder_dropout1 = nn.Dropout2d(p=p*0.3 if p!=0 else 0)
-
-        self.up2 = Up(base_channels * 4 , base_channels * 2, bilinear=bilinear)
         self.decoder_dropout2 = nn.Dropout2d(p=p*0.2 if p!=0 else 0)
-
-        self.up3 = Up(base_channels * 2 , base_channels,     bilinear=bilinear)
-
-        self.up4 = Up(base_channels,      base_channels,     bilinear=bilinear)
-        self.out_conv = OutConv(base_channels, n_classes)
+        # 输出层
+        self.out_conv = nn.Conv2d(base_channels, n_classes, kernel_size=1)
         
     def forward(self, x):
-        x1 = self.inconv(x)             # [1, 64, 320, 320]
-        x1 = self.encoder_dropout1(x1)
+        x1 = self.encoder1(x)               # [1, 32, 320, 320]
+        x2 = self.dowm(x1)
+        x2 = self.encoder_dropout1(x2)
 
-        x2 = self.down1(x1)             # [1, 128, 160, 160]
-        x2 = self.encoder_dropout2(x2)
+        x2 = self.encoder2(x2)              # [1, 64, 160, 160]
+        x3 = self.dowm(x2)
+        x3 = self.encoder_dropout2(x3)
 
-        x3 = self.down2(x2)             # [1, 256, 80, 80]
-        x3 = self.encoder_dropout3(x3)
+        x3 = self.encoder3(x3)              # [1, 128, 80, 80]
+        x4 = self.dowm(x3)
+        x4 = self.encoder_dropout3(x4)
 
-        x4 = self.down3(x3)             # [1, 512, 40, 40]
-        x4 = self.encoder_dropout4(x4)
-
-        x5 = self.pool(x4)              # [1, 512, 20, 20]           
-        x = self.center_conv(x5)        # [1, 512, 20, 20]
+        x4 = self.encoder4(x4)              # [1, 256, 40, 40]
+        x5 = self.dowm(x4)
+        x5 = self.encoder_dropout4(x5)
+       
+        x = self.center_conv(x5)            # [1, 256, 20, 20]
         x = self.bottleneck_dropout(x)
-           
-        x = self.up1(x, x4)             # [1, 256, 40, 40]
+        
+        x = self.up(x)                      # [1, 256, 40, 40]
+        x = torch.cat([x, x4], dim=1)       # [1, 256+256, 40, 40]
+        x = self.decoder1(x)                # [1, 128, 40, 40]
         x = self.decoder_dropout1(x)
 
-        x = self.up2(x, x3)             # [1, 128, 80, 80]
+        x = self.up(x)                      # [1, 128, 80, 80]
+        x = torch.cat([x, x3], dim=1)       # [1, 128+128, 80, 80]
+        x = self.decoder2(x)                # [1, 64, 80, 80]
         x = self.decoder_dropout2(x)
 
-        x = self.up3(x, x2)             # [1, 64, 160, 160]
+        x = self.up(x)                      # [1, 64, 160, 160]
+        x = torch.cat([x, x2], dim=1)       # [1, 64+64, 160, 160]
+        x = self.decoder3(x)                # [1, 32, 160, 160]
 
-        x = self.up4(x, x1)             # [1, 64, 320, 320]
-        logits = self.out_conv(x)       # [1, c, 320, 320]       
+        x = self.up(x)                      # [1, 32, 160, 160]
+        x = torch.cat([x, x1], dim=1)       # [1, 32+32, 320, 320]
+        x = self.decoder4(x)                # [1, 32, 320, 320]
+        
+        logits = self.out_conv(x)           # [1, c, 320, 320]       
         return logits 
           
     def elastic_net(self, l1_lambda, l2_lambda):
@@ -93,73 +93,29 @@ class UNet(nn.Module):
             
         return l1_lambda * l1_loss + l2_lambda * l2_loss
     
-class ResD_UNet(nn.Module):
+class ResD_UNet(UNet):
     def __init__(self, in_channels,
                  n_classes,
                  p, 
                  base_channels=32,
-                 bilinear=True
                  ):
-        super(ResD_UNet, self).__init__()
-        self.in_channels = in_channels
-        self.n_classes = n_classes
-        self.bilinear = bilinear
+        super(ResD_UNet, self).__init__(
+            in_channels=in_channels,
+            n_classes=n_classes,
+            p=p,
+            base_channels=base_channels)
+        # 编码器
+        self.encoder2 = ResDConv(base_channels,   base_channels*2)
+        self.encoder3 = ResDConv(base_channels*2, base_channels*4) 
+        self.encoder4 = ResDConv(base_channels*4, base_channels*8)  
+
+        # 解码器
+        self.decoder1 = ResDConv(base_channels * 8 , base_channels * 4)   
+        self.decoder2 = ResDConv(base_channels * 4,  base_channels * 2)
+        self.decoder3 = ResDConv(base_channels * 2,  base_channels)
         
-        self.inconv = DoubleConv(in_channels, base_channels)
-
-        self.down1 = ResD_Down(base_channels, base_channels*2)
-        self.encoder_dropout2 = nn.Dropout2d(p=p*0.5 if p!=0 else 0)
-
-        self.down2 = ResD_Down(base_channels*2, base_channels*4)
-        self.encoder_dropout3 = nn.Dropout2d(p=p*0.8 if p!=0 else 0)
-
-        self.down3 = ResD_Down(base_channels*4, base_channels*8)
-        self.encoder_dropout4 = nn.Dropout2d(p=p)
-
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.center_conv = DoubleConv(base_channels*8, base_channels*8, mid_channels=base_channels*16)
-        self.bottleneck_dropout = nn.Dropout2d(p=min(p+0.1, 0.7) if p!=0.0 else 0.0) 
-
-        self.up1 = ResD_Up(base_channels * 8 , base_channels * 4, bilinear=bilinear)
-        self.decoder_dropout1 = nn.Dropout2d(p=p*0.5 if p!=0 else 0)
-
-        self.up2 = ResD_Up(base_channels * 4 , base_channels * 2, bilinear=bilinear)
-        self.decoder_dropout2 = nn.Dropout2d(p=p*0.3 if p!=0 else 0)
-
-        self.up3 = ResD_Up(base_channels * 2 , base_channels,     bilinear=bilinear)
-        self.decoder_dropout3 = nn.Dropout2d(p=p*0.1 if p!=0 else 0)
-
-        self.up4 = Up(base_channels,      base_channels,     bilinear=bilinear)
-        self.out_conv = OutConv(base_channels, n_classes)
-        
-    def forward(self, x):
-        x1 = self.inconv(x)             # [1, 64, 320, 320]
-
-        x2 = self.down1(x1)             # [1, 128, 160, 160]
-        x2 = self.encoder_dropout2(x2)
-
-        x3 = self.down2(x2)             # [1, 256, 80, 80]
-        x3 = self.encoder_dropout3(x3)
-
-        x4 = self.down3(x3)             # [1, 512, 40, 40]
-        x4 = self.encoder_dropout4(x4)
-
-        x5 = self.pool(x4)              # [1, 512, 20, 20]           
-        x = self.center_conv(x5)        # [1, 512, 20, 20]
-        x = self.bottleneck_dropout(x)
-           
-        x = self.up1(x, x4)             # [1, 256, 40, 40]
-        x = self.decoder_dropout1(x)
-
-        x = self.up2(x, x3)             # [1, 128, 80, 80]
-        x = self.decoder_dropout2(x)
-
-        x = self.up3(x, x2)             # [1, 64, 160, 160]
-        x = self.decoder_dropout3(x)
-
-        x = self.up4(x, x1)             # [1, 64, 320, 320]
-        logits = self.out_conv(x)       # [1, c, 320, 320]       
-        return logits
+    def forward(self, x):      
+        return super(ResD_UNet, self).forward(x)
     
             
 if __name__ == '__main__':

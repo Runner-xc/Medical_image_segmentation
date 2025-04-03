@@ -553,7 +553,7 @@ def main(args, aug_args):
                 best_epoch = epoch + 1
         
             # ===================== 静态配置 =====================
-            metrics_table_header = ['Metrics_Name', 'Mean', 'OM', 'OP', 'IOP']  # 原始表头
+            metrics_table_header = ['Metrics_Name', 'Mean', 'Aorta', 'Gallbladder', 'Left_Kidney', 'Right_Kidney', 'Liver', 'Pancreas', 'Spleen', 'Stomach']  # 原始表头
             metrics_table_left = ['Dice', 'Recall', 'Precision', 'F1_scores', 'mIoU', 'Accuracy']        
 
             epoch_s = format_epoch_header(epoch, end_epoch)
@@ -572,7 +572,7 @@ def main(args, aug_args):
 
             training_info = (
                 f"{PARAM_ICONS['time']} time : {datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}"
-                f"\n🍎 Train Loss: {train_mean_loss:.3f} "
+                f"\n🍎 Train Loss: {train_loss:.3f} "
                 f"| 🍏 Val Loss: {val_mean_loss:.3f}\n"
                 f"{PARAM_ICONS['best_epoch']} best_epoch : {best_epoch}\n"
                 f"{PARAM_ICONS['cost']} val_cost_time : {val_cost_time/60:.2f} mins"
@@ -710,15 +710,15 @@ if __name__ == '__main__':
     parser.add_argument('--elnloss',        type=bool,  default=False)
     parser.add_argument('--l1_lambda',      type=float, default=0.001)
     parser.add_argument('--l2_lambda',      type=float, default=0.001)
-    parser.add_argument('--dropout_p',      type=float, default=0.5  )
+    parser.add_argument('--dropout_p',      type=float, default=0.1  )
      
     parser.add_argument('--device',         type=str,   default='cuda:0')
     parser.add_argument('--resume',         type=str,   default=None,   help="the path of weight for resuming")
     parser.add_argument('--amp',            type=bool,  default=True,   help='use mixed precision training or not')
     
     # flag参数
-    parser.add_argument('--tb',             type=bool,  default=False,   help='use tensorboard or not')   
-    parser.add_argument('--save_flag',      type=bool,  default=False,   help='save weights or not')    
+    parser.add_argument('--tb',             type=bool,  default=True,   help='use tensorboard or not')   
+    parser.add_argument('--save_flag',      type=bool,  default=True,   help='save weights or not')    
     parser.add_argument('--split_flag',     type=bool,  default=False,  help='split data or not')
     parser.add_argument('--change_params',  type=bool,  default=False,  help='change params or not')       
     
