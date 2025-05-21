@@ -2,7 +2,7 @@ import torch
 from PIL import Image
 import torchvision
 from torch.utils.data import DataLoader, Dataset
-from utils.rock_data import SEM_DATA
+from utils.medicine_data import Synapse_data
 import argparse
 import time
 from model.deeplabv3 import deeplabv3_resnet50, deeplabv3_resnet101, deeplabv3_mobilenetv3_large
@@ -20,13 +20,13 @@ from tabulate import tabulate
 from utils.train_and_eval import *
 from utils.model_initial import *
 from utils.loss_fn import *
-from utils.metrics import Evaluate_Metric
+from utils.metrics import Metrics
 import utils.transforms as T
 from typing import Union, List
 from utils.slide_predict import SlidingWindowPredictor
 
 class SODPresetEval:
-    def __init__(self, base_size: Union[int, List[int]], mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+    def __init__(self, base_size: Union[int, List[int]], mean=(0.485), std=(0.229)):
         self.transforms = T.Compose([
             T.ToTensor(),
             T.Resize(base_size, resize_mask=False),
@@ -42,7 +42,7 @@ def main(args):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # 加载数据集
-    test_dataset = SEM_DATA(args.data_path, transforms=SODPresetEval([256, 256]))
+    test_dataset = Synapse_data(args.data_path, transforms=SODPresetEval([256, 256]))
     
     num_workers = 4
     test_loader = DataLoader(test_dataset, 
@@ -54,11 +54,11 @@ def main(args):
     model_map = {
             "u2net_full"                    : u2net_full_config(),
             "u2net_lite"                    : u2net_lite_config(),
-            "unet"                          : UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "ResD_unet"                     : ResD_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "a_unet"                        : A_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "m_unet"                        : M_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
-            "rdam_unet"                     : RDAM_UNet(in_channels=3, n_classes=4, base_channels=32, bilinear=True, p=args.dropout_p),
+            "unet"                          : UNet(in_channels=3, n_classes=4, base_channels=32,  p=args.dropout_p),
+            "ResD_unet"                     : ResD_UNet(in_channels=3, n_classes=4, base_channels=32,  p=args.dropout_p),
+            "a_unet"                        : A_UNet(in_channels=3, n_classes=4, base_channels=32,  p=args.dropout_p),
+            "m_unet"                        : M_UNet(in_channels=3, n_classes=4, base_channels=32,  p=args.dropout_p),
+            "rdam_unet"                     : RDAM_UNet(in_channels=3, n_classes=4, base_channels=32,  p=args.dropout_p),
             "aicunet"                       : AICUNet(in_channels=3, n_classes=4, base_channels=32, p=args.dropout_p),
             "vm_unet"                       : VMUNet(input_channels=3, num_classes=4),
             "Segnet"                        : SegNet(n_classes=4, dropout_p=args.dropout_p),
@@ -80,7 +80,7 @@ def main(args):
         
     model = model.to(device)
     model.eval()
-    Metric = Evaluate_Metric()
+    metric = Metrics(args.class_names)
 
     # 创建优化后的预测器
     predictor = SlidingWindowPredictor(
@@ -135,7 +135,7 @@ def main(args):
                 
                 # 使用 argmax 获取每个像素点预测最大的类别索引
                 pred_mask = torch.softmax(logits, dim=1)
-                metrics = Metric.update(pred_mask, masks)
+                metrics = metric.update(pred_mask, masks)
                 Metric_list += metrics
                 pred_mask = torch.argmax(logits, dim=1)  # [1, 320, 320]
 
@@ -180,17 +180,20 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_path',      type=str,       default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/datasets/CSV/test_shale_256.csv')
+    parser.add_argument('--data_path',      type=str,       default='/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/medical_datasets/Synapse/CSV/test_synapse.csv')
     parser.add_argument('--base_size',      type=int,       default=256 )
     parser.add_argument('--dropout_p',      type=int,       default=0   )
-    parser.add_argument('--model',          type=str,       default='rdam_unet',     help='unet, a_unet, m_unet, rdam_unet, ResD_unet, Segnet, pspnet, deeplabv3, u2net_full, u2net_lite')
+    parser.add_argument('--model',          type=str,       default='unet',     help='unet, a_unet, m_unet, rdam_unet, ResD_unet, Segnet, pspnet, deeplabv3, u2net_full, u2net_lite')
     parser.add_argument('--weights_path',   type=str,       
-                                            default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/results/save_weights/rdam_unet/L_DiceLoss--S_CosineAnnealingLR/optim_AdamW-lr_0.0008-wd_0.0001/2025-04-01_17-40-23/model_best_ep_23.pth')
+                                            default='/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/results/save_weights/unet/L_DiceLoss--S_CosineAnnealingLR/optim_AdamW-lr_0.0008-wd_0.0001/2025-05-21_18-49-39/model_best_ep_3.pth')
     
-    parser.add_argument('--save_path',      type=str,       default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/results/predict')
-    parser.add_argument('--single_path',    type=str,       default='/mnt/e/VScode/WS-Hub/WS-UNet/UNet/results/single_predict')
+    parser.add_argument('--save_path',      type=str,       default='/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/results/predict')
+    parser.add_argument('--single_path',    type=str,       default='/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/results/single_predict')
     parser.add_argument('--single',         type=bool,      default=False,          help='test single img or not')
     parser.add_argument('--slide',          type=bool,      default=False)
+    parser.add_argument('--class_names',        type=list,
+                        default=['Aorta', 'Gallbladder', 'Spleen', 'Left_Kidney', 'Right_Kidney', 'Liver', 'Pancreas', 'Stomach'],
+                        help="class names for the dataset, excluding background")
     
     args = parser.parse_args()
     main(args)

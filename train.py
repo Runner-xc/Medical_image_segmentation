@@ -25,7 +25,7 @@ from utils.model_initial import *
 from utils import param_modification
 from utils import write_experiment_log
 from utils.loss_fn import *
-from utils.metrics import Evaluate_Metric
+from utils.metrics import Metrics
 from torch.utils.tensorboard import SummaryWriter
 import utils.transforms as T
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau
@@ -148,7 +148,7 @@ def main(args, aug_args):
 
     # 划分数据集
     if args.num_small_data is not None:
-        train_datasets, val_datasets, test_datasets = data_split.small_data_split_to_train_val_test(args.data_path, 
+        train_datasets, val_datasets, test_datasets = data_split.small_data_split_to_train_val_test(aug_args, args.data_path, 
                                                                                    num_small_data = args.num_small_data, 
                                                                                    # train_ratio=0.8, 
                                                                                    # val_ratio=0.1, 
@@ -189,12 +189,12 @@ def main(args, aug_args):
             # UNet 系列
             "u2net_full"                    : u2net_full_config(),
             "u2net_lite"                    : u2net_lite_config(),
-            "unet"                          : UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
-            "ResD_unet"                     : ResD_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
-            "a_unet"                        : A_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
-            "m_unet"                        : M_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
-            "rdam_unet"                     : RDAM_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
-            "dwrdam_unet"                   : DWRDAM_UNet(in_channels=1, n_classes=9, base_channels=32, bilinear=True, p=args.dropout_p),
+            "unet"                          : UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
+            "ResD_unet"                     : ResD_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
+            "a_unet"                        : A_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
+            "m_unet"                        : M_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
+            "rdam_unet"                     : RDAM_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
+            "dwrdam_unet"                   : DWRDAM_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
             "aicunet"                       : AICUNet(in_channels=1, n_classes=9, base_channels=32, p=args.dropout_p),
             "vm_unet"                       : VMUNet(input_channels=1, num_classes=9),
             "dc_unet"                       : DC_UNet(in_channels=1, n_classes=9, p=args.dropout_p),
@@ -275,19 +275,19 @@ def main(args, aug_args):
         
     # 损失函数 
     loss_map = {
-            'CrossEntropyLoss'  : CrossEntropyLoss(),
-            'DiceLoss'          : diceloss(),
-            'FocalLoss'         : Focal_Loss(),
-            'WDiceLoss'         : WDiceLoss(),
-            'DWDLoss'           : DWDLoss(),
-            'IoULoss'           : IOULoss(),
+            'CrossEntropyLoss'  : CrossEntropyLoss(args.class_names),
+            'DiceLoss'          : diceloss(args.class_names),
+            'FocalLoss'         : Focal_Loss(args.class_names),
+            'WDiceLoss'         : WDiceLoss(args.class_names),
+            'DWDLoss'           : DWDLoss(args.class_names),
+            'IoULoss'           : IOULoss(args.class_names),
             'dice_hd'           : AdaptiveSegLoss(4)
         }
     loss_fn = loss_map.get(args.loss_fn)
     
     # 缩放器
     scaler = torch.amp.GradScaler() if args.amp else None
-    Metrics = Evaluate_Metric()
+    metrics = Metrics(args.class_names)
     
     # 日志保存路径
     save_logs_path = f"{args.results_path}/{args.log_name}/{args.model}/L_{args.loss_fn}--S_{args.scheduler}"
@@ -350,6 +350,7 @@ def main(args, aug_args):
     best_epoch = 0 
     patience = 0 
     current_mean_loss = float('inf')
+    loss_names = args.class_names + ['total_loss']
 
     """断点续传"""    
     if args.resume:
@@ -372,44 +373,27 @@ def main(args, aug_args):
         # 记录时间
         start_time = time.time()
         # 训练
-        # Aorta_loss, Gallbladder_loss, Left_Kidney_loss, Right_Kidney_loss, Liver_loss, Pancreas_loss, Spleen_loss, Stomach_loss, train_loss, Metric_list
-        Aorta_loss, Gallbladder_loss, Left_Kidney_loss, Right_Kidney_loss, Liver_loss, Pancreas_loss, Spleen_loss, Stomach_loss, train_loss, T_Metric_list = train_one_epoch(model, 
-                                                                                    optimizer, 
-                                                                                    epoch, 
-                                                                                    train_dataloader, 
-                                                                                    device=device, 
-                                                                                    loss_fn=loss_fn, 
-                                                                                    scaler=scaler,
-                                                                                    Metric=Metrics,
-                                                                                    scheduler = scheduler,
-                                                                                    elnloss=args.elnloss,     #  Elastic Net正则化
-                                                                                    l1_lambda=args.l1_lambda,
-                                                                                    l2_lambda=args.l2_lambda) # loss_fn=loss_fn, 
+        train_losses, T_Metric_list = train_one_epoch(model, 
+                                                    optimizer, 
+                                                    epoch, 
+                                                    train_dataloader, 
+                                                    device=device, 
+                                                    loss_fn=loss_fn, 
+                                                    scaler=scaler,
+                                                    Metric=metrics,
+                                                    scheduler = scheduler,
+                                                    class_names=args.class_names,
+                                                    elnloss=args.elnloss,     #  Elastic Net正则化
+                                                    l1_lambda=args.l1_lambda,
+                                                    l2_lambda=args.l2_lambda) # loss_fn=loss_fn, 
         
         # 求平均
-        train_Aorta_loss   = Aorta_loss / len(train_dataloader)
-        train_Gallbladder_loss = Gallbladder_loss / len(train_dataloader)
-        train_Left_Kidney_loss = Left_Kidney_loss / len(train_dataloader)
-        train_Right_Kidney_loss = Right_Kidney_loss / len(train_dataloader)
-        train_Liver_loss   = Liver_loss / len(train_dataloader)
-        train_Pancreas_loss = Pancreas_loss / len(train_dataloader)
-        train_Spleen_loss  = Spleen_loss / len(train_dataloader)
-        train_Stomach_loss = Stomach_loss / len(train_dataloader)
-        train_loss       = train_loss / len(train_dataloader)
-        
-        train_loss_list = [train_Aorta_loss, 
-                           train_Gallbladder_loss, 
-                           train_Left_Kidney_loss, 
-                           train_Right_Kidney_loss, 
-                           train_Liver_loss, 
-                           train_Pancreas_loss, 
-                           train_Spleen_loss,
-                           train_Stomach_loss, 
-                           train_loss]
+        average_train_losses = [train_losses[i] / len(train_dataloader) for i in range(len(train_losses))]
+        train_total_loss = average_train_losses[-1]
         
         # 评价指标 metrics = [recall, precision, dice, f1_score]
         train_metrics               ={}
-        train_metrics["Loss"]       = train_loss_list
+        train_metrics["Loss"]       = average_train_losses
         train_metrics["Recall"]     = T_Metric_list[0]
         train_metrics["Precision"]  = T_Metric_list[1]
         train_metrics["Dice"]       = T_Metric_list[2]
@@ -422,54 +406,30 @@ def main(args, aug_args):
         train_cost_time = end_time - start_time
 
         # 打印
-        print(
-            f"💧train_Aorta_loss: {train_Aorta_loss:.3f}\n"
-            f"💧train_Gallbladder_loss: {train_Gallbladder_loss:.3f}\n"
-            f"💧train_Left_Kidney_loss: {train_Left_Kidney_loss:.3f}\n"
-            f"💧train_Right_Kidney_loss: {train_Right_Kidney_loss:.3f}\n"
-            f"💧train_Liver_loss: {train_Liver_loss:.3f}\n"
-            f"💧train_Pancreas_loss: {train_Pancreas_loss:.3f}\n"
-            f"💧train_Spleen_loss: {train_Spleen_loss:.3f}\n"
-            f"💧train_Stomach_loss: {train_Stomach_loss:.3f}\n"
-            f"💧train_loss: {train_loss:.3f}\n"
-            f"🕒train_cost_time: {train_cost_time/60:.2f}mins\n")
+        for loss, name in zip(average_train_losses ,loss_names):
+            print(f"💧train_{name}_loss: {loss:.3f}")
+        print(f"⏳train_cost_time: {train_cost_time:.2f}s")
         
 
         """验证"""
         if epoch % args.eval_interval == 0 or epoch == end_epoch - 1:
+            print("\n\n")
             print(f"🌈 ---- Validation ---- 🌈")
             # 记录验证开始时间
             start_time = time.time()
             # 每间隔eval_interval个epoch验证一次，减少验证频率节省训练时间
-            v_Aorta_loss, v_Gallbladder_loss, v_Left_Kidney_loss, v_Right_Kidney_loss, v_Liver_loss, v_Pancreas_loss, v_Spleen_loss, v_Stomach_loss, mean_loss, Metric_list = evaluate(model, device, val_dataloader, loss_fn, Metrics) # val_loss, recall, precision, f1_scores
+            val_losses, Metric_list = evaluate(model, device, val_dataloader, loss_fn, metrics, class_names=args.class_names) # val_loss, recall, precision, f1_scores
 
             # 求平均
-            v_Aorta_loss     = v_Aorta_loss / len(val_dataloader)
-            v_Gallbladder_loss = v_Gallbladder_loss / len(val_dataloader)
-            v_Left_Kidney_loss = v_Left_Kidney_loss / len(val_dataloader)
-            v_Right_Kidney_loss = v_Right_Kidney_loss / len(val_dataloader)
-            v_Liver_loss     = v_Liver_loss / len(val_dataloader)
-            v_Pancreas_loss  = v_Pancreas_loss / len(val_dataloader)
-            v_Spleen_loss    = v_Spleen_loss / len(val_dataloader)
-            v_Stomach_loss   = v_Stomach_loss / len(val_dataloader)
-            val_mean_loss   = mean_loss / len(val_dataloader)
-            # loss_list
-            val_loss_list   = [v_Aorta_loss,
-                               v_Gallbladder_loss, 
-                               v_Left_Kidney_loss, 
-                               v_Right_Kidney_loss, 
-                               v_Liver_loss, 
-                               v_Pancreas_loss, 
-                               v_Spleen_loss,
-                               v_Stomach_loss,
-                               val_mean_loss]
+            average_val_losses = [val_losses[i] / len(val_dataloader) for i in range(len(val_losses))]
+            val_total_loss = average_val_losses[-1]
             
             # 获取当前学习率
             current_lr = scheduler.get_last_lr()[0]  
 
             # 评价指标 metrics = [recall, precision, dice, f1_score]
             val_metrics                 ={}
-            val_metrics["Loss"]         = val_loss_list
+            val_metrics["Loss"]         = average_val_losses
             val_metrics["Recall"]       = Metric_list[0]
             val_metrics["Precision"]    = Metric_list[1]
             val_metrics["Dice"]         = Metric_list[2]
@@ -481,35 +441,20 @@ def main(args, aug_args):
             val_cost_time = end_time - start_time
 
             # 打印结果
-            print(
-                f"🔥val_Aorta_loss: {v_Aorta_loss:.3f}\n"
-                f"🔥val_Gallbladder_loss: {v_Gallbladder_loss:.3f}\n"
-                f"🔥val_Left_Kidney_loss: {v_Left_Kidney_loss:.3f}\n"
-                f"🔥val_Right_Kidney_loss: {v_Right_Kidney_loss:.3f}\n"
-                f"🔥val_Liver_loss: {v_Liver_loss:.3f}\n"
-                f"🔥val_Pancreas_loss: {v_Pancreas_loss:.3f}\n"
-                f"🔥val_Spleen_loss: {v_Spleen_loss:.3f}\n"
-                f"🔥val_Stomach_loss: {v_Stomach_loss:.3f}\n"
-                f"🔥val_mean_loss: {val_mean_loss:.3f}\n"
-                f"🕒val_cost_time: {val_cost_time:.2f}s")
+            
+            for loss, name in zip(average_val_losses ,loss_names):
+                print(f"🔥val_{name}_loss: {loss:.3f}")
+            print(f"🕒val_cost_time: {val_cost_time:.2f}s")
             print(f"🚀Current learning rate: {current_lr:.7f}")
             
             # 记录日志
             tb = args.tb
             if tb:
-                writing_logs(writer, train_metrics, val_metrics, epoch) 
+                writing_logs(writer, train_metrics, val_metrics, epoch, loss_names) 
                 # 新增SwanLab日志记录
                 swanlab.log({
                     # 训练指标
-                    "train/Aorta_loss": train_Aorta_loss,
-                    "train/Gallbladder_loss": train_Gallbladder_loss,
-                    "train/Left_Kidney_loss": train_Left_Kidney_loss,
-                    "train/Right_Kidney_loss": train_Right_Kidney_loss,
-                    "train/Liver_loss": train_Liver_loss,
-                    "train/Pancreas_loss": train_Pancreas_loss,
-                    "train/Spleen_loss": train_Spleen_loss,
-                    "train/Stomach_loss": train_Stomach_loss,
-                    "train/train_loss": train_loss,
+                    **{f"train/{name}_loss": train_loss for name, train_loss in zip(loss_names, average_train_losses)},
                     "train/recall": train_metrics["Recall"][-1],
                     "train/precision": train_metrics["Precision"][-1],
                     "train/dice": train_metrics["Dice"][-1],
@@ -517,25 +462,16 @@ def main(args, aug_args):
                     "train/mIoU": train_metrics["mIoU"][-1],
                     "train/accuracy": train_metrics["Accuracy"][-1],
                     # 验证指标
-                    "val/Aorta_loss": v_Aorta_loss,
-                    "val/Gallbladder_loss": v_Gallbladder_loss,
-                    "val/Left_Kidney_loss": v_Left_Kidney_loss,
-                    "val/Right_Kidney_loss": v_Right_Kidney_loss,
-                    "val/Liver_loss": v_Liver_loss,
-                    "val/Pancreas_loss": v_Pancreas_loss,
-                    "val/Spleen_loss": v_Spleen_loss,
-                    "val/Stomach_loss": v_Stomach_loss,
-                    "val/val_mean_loss": val_mean_loss,
+                    **{f"val/{name}_loss": val_loss for name, val_loss in zip(loss_names, average_val_losses)},
                     "val/recall": val_metrics["Recall"][-1],
                     "val/precision": val_metrics["Precision"][-1],
                     "val/dice": val_metrics["Dice"][-1],
                     "val/f1_scores": val_metrics["F1_scores"][-1],
                     "val/mIoU": val_metrics["mIoU"][-1],
-                    "val/accuracy": val_metrics["Accuracy"][-1],
-                    
+                    "val/accuracy": val_metrics["Accuracy"][-1],            
                     # 学习率
                     "learning_rate": current_lr,
-                    
+                
                     # 时间指标
                     "time/epoch_time": train_cost_time + val_cost_time
                 }, step=epoch)              
@@ -548,12 +484,12 @@ def main(args, aug_args):
                     run_tensorboard(log_path)               
             
             # 保存指标
-            if best_mean_loss >= val_mean_loss:
-                best_mean_loss = val_mean_loss
+            if best_mean_loss >= val_total_loss:
+                best_mean_loss = val_total_loss
                 best_epoch = epoch + 1
         
             # ===================== 静态配置 =====================
-            metrics_table_header = ['Metrics_Name', 'Mean', 'Aorta', 'Gallbladder', 'Left_Kidney', 'Right_Kidney', 'Liver', 'Pancreas', 'Spleen', 'Stomach']  # 原始表头
+            metrics_table_header = ['Metrics_Name', 'total'] + args.class_names # 原始表头
             metrics_table_left = ['Dice', 'Recall', 'Precision', 'F1_scores', 'mIoU', 'Accuracy']        
 
             epoch_s = format_epoch_header(epoch, end_epoch)
@@ -564,16 +500,22 @@ def main(args, aug_args):
             metrics_table = [
                 [name,  
                 f"{metrics_dict[name][-1]:.5f}",  # 平均
-                f"{metrics_dict[name][0]:.5f}",   # OM
-                f"{metrics_dict[name][1]:.5f}",   # OP
-                f"{metrics_dict[name][2]:.5f}"]   # IOP
+                f"{metrics_dict[name][0]:.5f}",   # Aorta
+                f"{metrics_dict[name][1]:.5f}",   # Gallbladder
+                f"{metrics_dict[name][2]:.5f}",   # Left_Kidney
+                f"{metrics_dict[name][3]:.5f}",   # Right_Kidney
+                f"{metrics_dict[name][4]:.5f}",   # Liver
+                f"{metrics_dict[name][5]:.5f}",   # Pancreas
+                f"{metrics_dict[name][6]:.5f}",   # Spleen
+                f"{metrics_dict[name][7]:.5f}",   # Stomach
+                ]   
                 for name in metrics_table_left
             ]
 
             training_info = (
                 f"{PARAM_ICONS['time']} time : {datetime.datetime.now().strftime('%Y.%m.%d-%H:%M:%S')}"
-                f"\n🍎 Train Loss: {train_loss:.3f} "
-                f"| 🍏 Val Loss: {val_mean_loss:.3f}\n"
+                f"\n🍎 Train Loss: {train_total_loss:.3f} "
+                f"| 🍏 Val Loss: {val_total_loss:.3f}\n"
                 f"{PARAM_ICONS['best_epoch']} best_epoch : {best_epoch}\n"
                 f"{PARAM_ICONS['cost']} val_cost_time : {val_cost_time/60:.2f} mins"
             )
@@ -617,7 +559,7 @@ def main(args, aug_args):
 
             save_file = {"model"        : model.state_dict(),
                         "optimizer"     : optimizer.state_dict(),
-                        "Metrics"       : Metrics.state_dict(),
+                        "Metrics"       : metrics.state_dict(),
                         "scheduler"     : scheduler.state_dict(),
                         "best_mean_loss": best_mean_loss,
                         "best_epoch"    : best_epoch,
@@ -645,8 +587,8 @@ def main(args, aug_args):
             torch.save(save_file, f"{save_weights_path}/model_ep_{epoch}.pth") 
         
         # 记录验证loss是否出现上升       
-        if val_mean_loss <= current_mean_loss:
-            current_mean_loss = val_mean_loss 
+        if val_total_loss <= current_mean_loss:
+            current_mean_loss = val_total_loss 
             patience = 0   
         else:
             patience += 1 
@@ -706,6 +648,10 @@ if __name__ == '__main__':
                         default='CosineAnnealingLR', 
                         help="'CosineAnnealingLR', 'ReduceLROnPlateau'.")
     
+    parser.add_argument('--class_names',        type=list,
+                        default=['Aorta', 'Gallbladder', 'Spleen', 'Left_Kidney', 'Right_Kidney', 'Liver', 'Pancreas', 'Stomach'],
+                        help="class names for the dataset, excluding background")
+    
     # 正则化
     parser.add_argument('--elnloss',        type=bool,  default=False)
     parser.add_argument('--l1_lambda',      type=float, default=0.001)
@@ -725,7 +671,7 @@ if __name__ == '__main__':
     # 训练参数
     parser.add_argument('--train_ratio',    type=float, default=0.7) 
     parser.add_argument('--val_ratio',      type=float, default=0.2)
-    parser.add_argument('--batch_size',     type=int,   default=8  ) 
+    parser.add_argument('--batch_size',     type=int,   default=2  ) 
     parser.add_argument('--start_epoch',    type=int,   default=0,      help='start epoch')
     parser.add_argument('--end_epoch',      type=int,   default=200,    help='ending epoch')
     parser.add_argument('--warmup_epochs',  type=int,   default=10,      help='number of warmup epochs')
@@ -735,16 +681,16 @@ if __name__ == '__main__':
     parser.add_argument('--wd',             type=float, default=1e-4,   help='weight decay')
     
     parser.add_argument('--eval_interval',  type=int,   default=1,      help='interval for evaluation')
-    parser.add_argument('--num_small_data', type=int,   default=None,   help='number of small data')
+    parser.add_argument('--num_small_data', type=int,   default=100,   help='number of small data')
     parser.add_argument('--Tmax',           type=int,   default=60,     help='the numbers of half of T for CosineAnnealingLR')
     parser.add_argument('--eta_min',        type=float, default=1e-8,   help='minimum of lr for CosineAnnealingLR')
 
     main_args = parser.parse_args()
 
     aug_data_parser = argparse.ArgumentParser(description="data augmentation")
-    aug_data_parser.add_argument("--root_path",    default="/mnt/e/VScode/WS-Hub/WS-UNet/UNet/datasets",            type=str,       help="root path")
+    aug_data_parser.add_argument("--root_path",    default="/mnt/e/VScode/WS-Hub/Linux-md_seg/Medical_image_segmentation/medical_datasets",            type=str,       help="root path")
     aug_data_parser.add_argument("--size",         default="256",                                                   type=str,       help="size of img and mask") 
-    aug_data_parser.add_argument("--aug_times",    default=60,                                                      type=int,       help="augmentation times")
+    aug_data_parser.add_argument("--aug_times",    default=10,                                                      type=int,       help="augmentation times")
     aug_args = aug_data_parser.parse_args()
 
     main(main_args, aug_args)

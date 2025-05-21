@@ -15,15 +15,17 @@ os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 Cross Entropy Loss
 """
 class CrossEntropyLoss():
-    def __init__(self):
-        self.class_names = [
-                            'Aorta', 
-                            'Gallbladder', 
-                            'Spleen',
-                            'Left Kidney',
-                            'Right Kidney',
-                            'Liver',
-                            'Pancreas']
+    def __init__(self, class_names):
+        """
+        class_names:['Aorta', 
+                     'Gallbladder', 
+                     'Spleen',
+                     'Left Kidney',
+                     'Right Kidney',
+                     'Liver',
+                     'Pancreas']          
+        """
+        self.class_names = class_names
 
     def __call__(self, logits, targets):
         """
@@ -40,35 +42,23 @@ class CrossEntropyLoss():
        
         # celoss期望的logits是(b, c, h, w), targets是(b, h, w)
         loss_dict = {}
-        names = ['Background', 'Organic matter', 'Organic pores', 'Inorganic pores']
         for i in range(num_classes):
             target = targets[:, i, ...]
             logit = logits[:, i, ...] 
-            loss_dict[names[i]] = ce(logit, target)   # [b, 256, 256]  
+            loss_dict[self.class_names[i]] = ce(logit, target)   # [b, 256, 256]  
 
         # 记录类别损失
         total_loss = torch.stack(list(loss_dict.values())).mean()
         loss_dict['total_loss'] = total_loss
-        
         return loss_dict
     
 class diceloss():
-    
-    def __init__(self, smooth=1e-5):
+    def __init__(self, class_names, smooth=1e-5):
         """
         smooth: 平滑值
         """
         self.smooth = smooth
-        self.class_names = [
-                            'Aorta', 
-                            'Gallbladder', 
-                            'Spleen',
-                            'Left Kidney',
-                            'Right Kidney',
-                            'Liver',
-                            'Pancreas',
-                            'Stomach']
-        self.num_classes = len(self.class_names)
+        self.class_names = class_names
 
     def __call__(self, logits, targets):
         """
@@ -93,35 +83,17 @@ class diceloss():
         total_loss = loss.sum() / num_classes
         
         # 计算每个类别的损失
-        loss_dict = {}
+        loss_dict = {name: loss[i] for i, name in enumerate(self.class_names)}
         loss_dict['total_loss'] = total_loss
-        loss_dict['Aorta'] = loss[0]
-        loss_dict['Gallbladder'] = loss[1]
-        loss_dict['Spleen'] = loss[2]
-        loss_dict['Left Kidney'] = loss[3]
-        loss_dict['Right Kidney'] = loss[4]
-        loss_dict['Liver'] = loss[5]
-        loss_dict['Pancreas'] = loss[6]
-        loss_dict['Stomach'] = loss[7]
-
         return loss_dict
 
 class IOULoss():
-    def __init__(self, smooth=1e-5):
+    def __init__(self, class_names, smooth=1e-5):
         """
         smooth: 平滑值
         """
         self.smooth = smooth
-        self.class_names = [
-                            'Aorta', 
-                            'Gallbladder', 
-                            'Spleen',
-                            'Left Kidney',
-                            'Right Kidney',
-                            'Liver',
-                            'Pancreas',
-                            'Stomach']
-        self.num_classes = len(self.class_names)
+        self.class_names = class_names
 
     def __call__(self, logits, targets):
         """
@@ -147,16 +119,8 @@ class IOULoss():
         
         # 计算每个类别的损失
         loss_dict = {}
+        loss_dict = {name: loss[i] for i, name in enumerate(self.class_names)}
         loss_dict['total_loss'] = total_loss
-        loss_dict['Aorta'] = loss[0]
-        loss_dict['Gallbladder'] = loss[1]
-        loss_dict['Spleen'] = loss[2]
-        loss_dict['Left Kidney'] = loss[3]
-        loss_dict['Right Kidney'] = loss[4]
-        loss_dict['Liver'] = loss[5]
-        loss_dict['Pancreas'] = loss[6]
-        loss_dict['Stomach'] = loss[7]
-
         return loss_dict
 
 class AdaptiveSegLoss(nn.Module):
@@ -218,19 +182,10 @@ class Focal_Loss():
     γ : 聚焦因子,用于控制损失的敏感度
     α : 平衡正负样本权重
     """
-    def __init__(self,alpha=0.25, gamma=2):
+    def __init__(self, class_names, alpha=0.25, gamma=2):
         self.gamma=gamma
         self.alpha=alpha
-        self.class_names = [
-                            'Aorta', 
-                            'Gallbladder', 
-                            'Spleen',
-                            'Left Kidney',
-                            'Right Kidney',
-                            'Liver',
-                            'Pancreas',
-                            'Stomach']
-        self.num_classes = len(self.class_names)
+        self.class_names = class_names
 
     def __call__(self,logits, targets):
         """
@@ -252,48 +207,23 @@ class Focal_Loss():
         # 计算每个类别的损失，忽略背景（索引0）
         loss_dict = {}
         total_loss = 0
-        names = ['Aorta', 
-                'Gallbladder', 
-                'Spleen',
-                'Left Kidney',
-                'Right Kidney',
-                'Liver',
-                'Pancreas',
-                'Stomach']
-        for i in range(1, self.num_classes+1):  # 从1开始，忽略背景
+        for i in range(1, num_classes):  # 从1开始，忽略背景
             class_loss = focal_loss[targets == i].mean()
-            loss_dict[names[i-1]] = class_loss
-            total_loss += class_loss
-        
-        # for i in range(1, num_classes):
-        #     target = targets[:, i, ...]
-        #        
-        #     pt = torch.exp(-ce_loss)
-        #     loss_dict[names[i-1]] = self.alpha * ((1-pt)**self.gamma) * ce_loss      
+            loss_dict[self.class_names[i-1]] = class_loss
+            total_loss += class_loss    
 
         # 计算总损失
         total_loss /= num_classes-1  # 减去背景类
         loss_dict['total_loss'] = total_loss
-
         return loss_dict
-
 class WDiceLoss():
     
-    def __init__(self, smooth=1e-5):
+    def __init__(self, class_names, smooth=1e-5):
         """
         smooth: 平滑值
         """
         self.smooth = smooth
-        self.class_names = [
-                            'Aorta', 
-                            'Gallbladder', 
-                            'Spleen',
-                            'Left Kidney',
-                            'Right Kidney',
-                            'Liver',
-                            'Pancreas',
-                            'Stomach']
-        self.num_classes = len(self.class_names)
+        self.class_names = class_names
 
     def __call__(self, logits, targets, weights=[0.1,0.2,0.7]):
         """
@@ -310,15 +240,7 @@ class WDiceLoss():
         targets = F.one_hot(targets, num_classes=num_classes).permute(0, 3, 1, 2).float()     
         # 计算每个类别的损失
         loss_dict = {}
-        total_loss = 0
-        names = ['Aorta', 
-                'Gallbladder', 
-                'Spleen',
-                'Left Kidney',
-                'Right Kidney',
-                'Liver',
-                'Pancreas',
-                'Stomach'] 
+        total_loss = 0.0
         for i in range(1,num_classes):
             pred = preds[:, i, ...]
             target = targets[:, i, ...]
@@ -329,36 +251,28 @@ class WDiceLoss():
             loss = tensor_one - dice
             # 加权
             loss = loss * weights[i-1]
-            loss_dict[names[i-1]] = loss 
+            loss_dict[self.class_names[i-1]] = loss 
             total_loss += loss 
-
         loss_dict['total_loss'] = total_loss
-
         return loss_dict
 
 """
 DWDLoss 动态加权loss
 """ 
 class DWDLoss(nn.Module):
-    def __init__(self, smooth=1e-8):
-        self.class_names = [
-                            'Aorta', 
-                            'Gallbladder', 
-                            'Spleen',
-                            'Left Kidney',
-                            'Right Kidney',
-                            'Liver',
-                            'Pancreas',
-                            'Stomach']
+    def __init__(self, class_names, smooth=1e-8):
+        self.class_names = class_names
         self.smooth = smooth
     def calculate_cnum(self, targets):
         cnum = []
         for i in range(1,4):
             cnum.append(torch.sum(targets==i))
         return torch.tensor(cnum)
+    
     def calculate_weights(self, n, c):
         max_n = torch.max(n)
         return torch.log(max_n / n[c-1]) + 1
+    
     def __call__(self, logits, targets):
         num_classes = logits.shape[1]
         # 处理logits
@@ -367,23 +281,7 @@ class DWDLoss(nn.Module):
         masks = F.one_hot(targets, num_classes=num_classes).permute(0, 3, 1, 2).float()
         # 类别权重
         total_loss = 0.0
-        loss_dict = {'Aorta' : 0.0, 
-                    'Gallbladder' : 0.0, 
-                    'Spleen' : 0.0,
-                    'Left Kidney' : 0.0,
-                    'Right Kidney' : 0.0,
-                    'Liver' : 0.0,
-                    'Pancreas' : 0.0,
-                    'Stomach' : 0.0}
-        
-        names = ['Aorta', 
-                'Gallbladder', 
-                'Spleen',
-                'Left Kidney',
-                'Right Kidney',
-                'Liver',
-                'Pancreas',
-                'Stomach'] 
+        loss_dict = {f"{name}": 0.0 for name in self.class_names}
         one = torch.tensor(1).to(targets.device)
 
         # 动态加权loss
@@ -402,7 +300,7 @@ class DWDLoss(nn.Module):
             # single_loss
             w_dice = weight ** (1-ip) * dice 
             loss = one - w_dice
-            loss_dict[names[i-1]] = loss
+            loss_dict[self.class_names[i-1]] = loss
             # add
             total_loss += loss
      
