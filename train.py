@@ -189,22 +189,22 @@ def main(args, aug_args):
             # UNet 系列
             "u2net_full"                    : u2net_full_config(),
             "u2net_lite"                    : u2net_lite_config(),
-            "unet"                          : UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
-            "ResD_unet"                     : ResD_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
-            "a_unet"                        : A_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
-            "m_unet"                        : M_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
-            "rdam_unet"                     : RDAM_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
-            "dwrdam_unet"                   : DWRDAM_UNet(in_channels=1, n_classes=9, base_channels=32,  p=args.dropout_p),
-            "aicunet"                       : AICUNet(in_channels=1, n_classes=9, base_channels=32, p=args.dropout_p),
-            "vm_unet"                       : VMUNet(input_channels=1, num_classes=9),
-            "dc_unet"                       : DC_UNet(in_channels=1, n_classes=9, p=args.dropout_p),
+            "unet"                          : UNet(in_channels=3, n_classes=len(args.class_names)+1, base_channels=32,  p=args.dropout_p),
+            "ResD_unet"                     : ResD_UNet(in_channels=3, n_classes=len(args.class_names)+1, base_channels=32,  p=args.dropout_p),
+            "a_unet"                        : A_UNet(in_channels=3, n_classes=len(args.class_names)+1, base_channels=32,  p=args.dropout_p),
+            "m_unet"                        : M_UNet(in_channels=3, n_classes=len(args.class_names)+1, base_channels=32,  p=args.dropout_p),
+            "rdam_unet"                     : RDAM_UNet(in_channels=3, n_classes=len(args.class_names)+1, base_channels=32,  p=args.dropout_p),
+            "dwrdam_unet"                   : DWRDAM_UNet(in_channels=3, n_classes=len(args.class_names)+1, base_channels=32,  p=args.dropout_p),
+            "aicunet"                       : AICUNet(in_channels=3, n_classes=len(args.class_names)+1, base_channels=32, p=args.dropout_p),
+            "vm_unet"                       : VMUNet(input_channels=3, num_classes=len(args.class_names)+1),
+            "dc_unet"                       : DC_UNet(in_channels=3, n_classes=len(args.class_names)+1, p=args.dropout_p),
 
             # 其他架构
-            "Segnet"                        : SegNet(n_classes=9, dropout_p=args.dropout_p),
-            "pspnet"                        : PSPNet(classes=9, dropout=args.dropout_p, pretrained=False),
-            "deeplabv3_resnet50"            : deeplabv3_resnet50(aux=False, pretrain_backbone=False, num_classes=9),
-            "deeplabv3_resnet101"           : deeplabv3_resnet101(aux=False, pretrain_backbone=False, num_classes=9),
-            "deeplabv3_mobilenetv3_large"   : deeplabv3_mobilenetv3_large(aux=False, pretrain_backbone=False, num_classes=9)
+            "Segnet"                        : SegNet(n_classes=len(args.class_names)+1, dropout_p=args.dropout_p),
+            "pspnet"                        : PSPNet(classes=len(args.class_names)+1, dropout=args.dropout_p, pretrained=False),
+            "deeplabv3_resnet50"            : deeplabv3_resnet50(aux=False, pretrain_backbone=False, num_classes=len(args.class_names)+1),
+            "deeplabv3_resnet101"           : deeplabv3_resnet101(aux=False, pretrain_backbone=False, num_classes=len(args.class_names)+1),
+            "deeplabv3_mobilenetv3_large"   : deeplabv3_mobilenetv3_large(aux=False, pretrain_backbone=False, num_classes=len(args.class_names)+1)
         }
     model = model_map.get(args.model)
     if not model:
@@ -213,7 +213,7 @@ def main(args, aug_args):
     # 初始化模型
     kaiming_initial(model)
     model.to(device)
-    model_info = str(summary(model, (1, 1, 256, 256)))  
+    model_info = str(summary(model, (8, 3, 256, 256)))  
     
     """——————————————————————————————————————————————优化器 调度器——————————————————————————————————————————————"""
     # 优化器 
@@ -441,7 +441,6 @@ def main(args, aug_args):
             val_cost_time = end_time - start_time
 
             # 打印结果
-            
             for loss, name in zip(average_val_losses ,loss_names):
                 print(f"🔥val_{name}_loss: {loss:.3f}")
             print(f"🕒val_cost_time: {val_cost_time:.2f}s")
@@ -500,14 +499,7 @@ def main(args, aug_args):
             metrics_table = [
                 [name,  
                 f"{metrics_dict[name][-1]:.5f}",  # 平均
-                f"{metrics_dict[name][0]:.5f}",   # Aorta
-                f"{metrics_dict[name][1]:.5f}",   # Gallbladder
-                f"{metrics_dict[name][2]:.5f}",   # Left_Kidney
-                f"{metrics_dict[name][3]:.5f}",   # Right_Kidney
-                f"{metrics_dict[name][4]:.5f}",   # Liver
-                f"{metrics_dict[name][5]:.5f}",   # Pancreas
-                f"{metrics_dict[name][6]:.5f}",   # Spleen
-                f"{metrics_dict[name][7]:.5f}",   # Stomach
+                [f"{metrics_dict[name][i]:.5f}" for i in range(len(args.class_names))],
                 ]   
                 for name in metrics_table_left
             ]

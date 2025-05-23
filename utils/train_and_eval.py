@@ -249,9 +249,9 @@ def evaluate(model, device, data_loader, loss_fn, Metric, class_names, test:bool
     """
     model.eval()
     if test:
-        Metric_list = np.zeros((6, 9))
+        Metric_list = np.zeros((6, len(class_names)+1)) # 6个指标 + （类别数+平均指标）
     else:
-        Metric_list = np.zeros((6, 9))
+        Metric_list = np.zeros((6, len(class_names)+1))
     epoch_losses = [0.0] * len(class_names+['total'])  # 加上总损失
 
     with torch.no_grad():
@@ -290,9 +290,7 @@ def evaluate(model, device, data_loader, loss_fn, Metric, class_names, test:bool
 
                     metrics = Metric.update(pred_mask, masks)
                     Metric_list += metrics    
-
-            # 累加损失   # TODO : 2
+            # 计算损失        
             epoch_losses = [x+y for x, y in zip(epoch_losses, losses)]
-    
     Metric_list /= len(val_dataloader)
     return  epoch_losses, Metric_list

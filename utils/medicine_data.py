@@ -111,9 +111,9 @@ class Synapse_data(Dataset):
         assert os.path.exists(mask_path), f"The mask path '{mask_path}' does not exist."
         
         # 读取数据 
-        img = Image.open(img_path).convert('L')  # 将图片转换为RGB格式
-        mask = Image.open(mask_path).convert('L')   # 将mask转换为灰度图像, 不然会多一个维度
-        img_array = np.array(img)
+        img = Image.open(img_path).convert('RGB')     # 将图片转换为RGB格式
+        mask = Image.open(mask_path).convert('L')     # 将mask转换为灰度图像, 不然会多一个维度
+        img_array = np.array(img) 
         img_name = os.path.basename(img_path)
         # # 归一化图片
         img_array = img_array / 255.0 

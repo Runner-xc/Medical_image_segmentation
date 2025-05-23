@@ -189,6 +189,44 @@ class MDAM(nn.Module):
         weights = x + y
         return (group_x * weights.sigmoid()).reshape(b, c, h, w)
     
+class MDAMV2(nn.Module):
+    def __init__(self, channels, factor=32):
+        super(MDAMV2, self).__init__()
+        self.group = factor
+        assert channels // self.group > 0
+        self.softmax = nn.Softmax(dim=1)
+        self.averagePooling = nn.AdaptiveAvgPool2d((1,1))
+        self.Pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.Pool_w = nn.AdaptiveAvgPool2d((1, None))
+        self.groupNorm = nn.GroupNorm(channels // self.group, channels//self.group)
+        self.conv1x1 = nn.Conv2d(channels // self.group, channels // self.group, kernel_size=1, stride=1, padding=0)
+        self.conv3x3 = nn.Conv2d(channels // self.group, channels // self.group, kernel_size=3, stride=1, padding=1)
+        # SAM
+        self.sam = nn.Sequential(
+            nn.Conv2d(channels // self.group, channels // self.group, kernel_size=3, padding=1, bias=False),  # 从 c -> c/r
+            nn.BatchNorm2d(channels // self.group),
+            nn.ReLU(),
+            nn.Conv2d(channels // self.group, 1, kernel_size=1, bias=False),  # 从 c/r -> c
+            nn.Sigmoid()
+        )
+
+    def forward(self, inputs):
+        b, c, h, w = inputs.size()
+        group_x = inputs.reshape(b*self.group, -1, h, w)
+        # CAM
+        x_h = self.Pool_h(group_x)  # 高度方向池化
+        x_w = self.Pool_w(group_x).permute(0, 1, 3, 2)  # 宽度方向池化
+        hw = self.conv1x1(torch.cat([x_h, x_w], dim=2)) # 拼接之后卷积
+        x_h, x_w = torch.split(hw, [h, w], dim=2)       
+        x = self.groupNorm(group_x * x_h.sigmoid() * x_w.permute(0, 1, 3, 2).sigmoid()) 
+        x = self.softmax(self.averagePooling(x))   
+        # SAM
+        y = self.conv3x3(group_x) # 通过 3x3卷积层
+        y = self.sam(y)
+        weights = x + y
+        out = group_x * weights
+        return out.reshape(b, c, h, w)
+    
 """"----------------------------------------------------SE-----------------------------------------------------"""    
 class SE_Block(nn.Module):
     def __init__(self, inchannel, ratio=16):
@@ -202,7 +240,8 @@ class SE_Block(nn.Module):
             nn.Linear(inchannel // ratio, inchannel, bias=False),  # 从 c/r -> c
             nn.Sigmoid()
         )
- 
+        self._initialize_weights()  
+
     def forward(self, x):
             # 读取批数据图片数量及通道数
             b, c, h, w = x.size()
@@ -213,6 +252,23 @@ class SE_Block(nn.Module):
             # Fscale操作：将得到的权重乘以原来的特征图x
             return x * y.expand_as(x)
     
+    def _initialize_weights(self, init_gain=0.02):
+        """
+        初始化权重。
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, init_gain)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+    
 """"----------------------------------------------------DAtt-----------------------------------------------------"""  
 class DynamicAttention(nn.Module):
     def __init__(self, in_channels):
@@ -221,22 +277,139 @@ class DynamicAttention(nn.Module):
         self.key = nn.Conv2d(in_channels, in_channels//8, 1)
         self.value = nn.Conv2d(in_channels, in_channels, 1)
         self.gamma = nn.Parameter(torch.zeros(1))
-
+        self._initialize_weights()
+        
     def forward(self, x):
         batch, C, H, W = x.size()
         Q = self.query(x).view(batch, -1, H*W).permute(0,2,1)  # [B, N, C']
         K = self.key(x).view(batch, -1, H*W)                   # [B, C', N]
         V = self.value(x).view(batch, -1, H*W)                 # [B, C, N]
+        C1 = Q.size(2)  # C'
         
-        attention = torch.softmax(torch.bmm(Q, K) / (C**0.5), dim=-1)
+        attention = torch.softmax(torch.einsum("ijk, ikl -> ijl",Q, K)/(C1**0.5), dim=-1)
         out = torch.bmm(V, attention.permute(0,2,1)).view(batch, C, H, W)
         return self.gamma * out + x
     
+    def _initialize_weights(self, init_gain=0.02):
+        """
+        初始化权重。
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, init_gain)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+""""----------------------------------------------------Att_gate-----------------------------------------------------"""
+class Att_gate(nn.Module):
+    def __init__(self, F_g, F_l, F_int):
+        super(Att_gate, self).__init__()
+        self.W_g = nn.Sequential(
+            nn.Conv2d(F_g, F_int, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(F_int)
+        )
+
+        self.W_x = nn.Sequential(
+            nn.Conv2d(F_l, F_int, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(F_int)
+        )
+
+        self.psi = nn.Sequential(
+            nn.Conv2d(F_int, 1, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+
+        self.relu = nn.ReLU(inplace=True)
+        self._initialize_weights()
+
+    def forward(self, g, x):
+        g1 = self.W_g(g)
+        x1 = self.W_x(x)
+        psi = self.relu(g1 + x1)
+        # channel 减为1，并Sigmoid,得到权重矩阵
+        psi = self.psi(psi)
+        return x * psi
+    
+    def _initialize_weights(self, init_gain=0.02):
+        """
+        初始化权重。
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, init_gain)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+class Att_gateV2(nn.Module):
+    def __init__(self, F_g, F_l, num_classes):
+        super(Att_gateV2, self).__init__()
+        self.num_classes = num_classes
+        self.W_g = nn.Sequential(
+            nn.Conv2d(F_g, num_classes, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(num_classes)
+        )
+
+        self.W_x = nn.Sequential(
+            nn.Conv2d(F_l, num_classes, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(num_classes)
+        )
+
+        self.psi = nn.Sequential(
+            nn.Conv2d(num_classes, 1, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+
+        self.relu = nn.ReLU(inplace=True)
+        self._initialize_weights()
+
+    def _initialize_weights(self, init_gain=0.02):
+        """
+        初始化权重。
+        """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, init_gain)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, g, x):
+        # 可导部分
+        g1 = self.W_g(g)  # [B, C, H, W] 
+        x1 = self.W_x(x)  # [B, F_int, H, W]
+        
+        # 合并特征
+        psi = self.relu(g1 + x1)
+        psi = self.psi(psi)  # [B, 1, H, W]
+        return x * psi
+    
+    
+
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    ema = MDAM(32).to(device)
-    input_data = torch.rand(1, 32, 256, 256).to(device)
+    ema = MDAMV2(32).to(device)
+    input_data = torch.rand(8, 32, 256, 256).to(device)
     output_data = ema(input_data)
 
     print(ema)
